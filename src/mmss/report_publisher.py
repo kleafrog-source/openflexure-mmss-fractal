@@ -171,6 +171,22 @@ def _render_session_html(session_meta: Dict[str, Any], results: Dict[str, Any]) 
     status = session_meta.get("status", "unknown")
     vision_analysis = session_meta.get("vision_analysis", {})
     raw_json = html.escape(json.dumps(results, indent=2, ensure_ascii=False))
+    
+    # Check which analysis modes are available
+    has_invariants = results.get("invariants_analysis") is not None
+    has_hybrid = results.get("hybrid_analysis") is not None
+    has_vision_only = results.get("vision_only_analysis") is not None
+    
+    # Build mode indicators
+    mode_indicators = []
+    if has_invariants:
+        mode_indicators.append('<span class="mode-tag mode-invariants">Invariants ✓</span>')
+    if has_hybrid:
+        mode_indicators.append('<span class="mode-tag mode-hybrid">Hybrid ✓</span>')
+    if has_vision_only:
+        mode_indicators.append('<span class="mode-tag mode-vision">Vision Only ✓</span>')
+    
+    mode_indicators_html = " ".join(mode_indicators) if mode_indicators else '<span class="mode-tag mode-none">No analysis modes</span>'
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -391,6 +407,34 @@ def _render_session_html(session_meta: Dict[str, Any], results: Dict[str, Any]) 
         width: min(100% - 18px, 1280px);
       }}
     }}
+    .mode-tags {{
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }}
+    .mode-tag {{
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+    }}
+    .mode-invariants {{
+      background: rgba(25, 92, 89, 0.12);
+      color: var(--accent-2);
+    }}
+    .mode-hybrid {{
+      background: rgba(108, 67, 156, 0.12);
+      color: #6c439c;
+    }}
+    .mode-vision {{
+      background: rgba(182, 84, 42, 0.12);
+      color: var(--accent);
+    }}
+    .mode-none {{
+      background: rgba(102, 95, 85, 0.12);
+      color: var(--muted);
+    }}
   </style>
 </head>
 <body>
@@ -401,6 +445,7 @@ def _render_session_html(session_meta: Dict[str, Any], results: Dict[str, Any]) 
           <div class="eyebrow">MMSS Fractal Analysis</div>
           <h1>{html.escape(str(final_type))}</h1>
           <p>Captured at {html.escape(str(timestamp))}. This viewer groups the microscope image, JSON report, and the final MMSS decision into one session so it can be opened directly in a browser on the workstation or microscope display.</p>
+          <div class="mode-tags">{mode_indicators_html}</div>
         </div>
         <div class="status-pill">{html.escape(str(status)).upper()}</div>
       </div>
