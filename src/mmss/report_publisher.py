@@ -476,8 +476,16 @@ def _render_gallery_html(sessions: list[Dict[str, Any]]) -> str:
     for session in sessions:
         metrics = session.get("final_metrics", {})
         detected = metrics.get("detected_type", "Unknown pattern")
-        has_raw_vision = session.get("raw_vision") is not None
-        raw_vision_status = "✓" if has_raw_vision else "—"
+        
+        # Check which analysis modes are available
+        has_invariants = session.get("has_invariants", False)
+        has_hybrid = session.get("has_hybrid", False)
+        has_vision_only = session.get("has_vision_only", False)
+        
+        invariants_status = "✓" if has_invariants else "—"
+        hybrid_status = "✓" if has_hybrid else "—"
+        vision_status = "✓" if has_vision_only else "—"
+        
         cards.append(
             f"""
             <div class="card" data-session-id="{html.escape(session['session_id'])}" data-image-path="{html.escape(session.get('image_path', ''))}">
@@ -495,7 +503,11 @@ def _render_gallery_html(sessions: list[Dict[str, Any]]) -> str:
                     <span>V {html.escape(_format_metric(metrics.get('V')))}</span>
                     <span>D_f {html.escape(_format_metric(metrics.get('D_f')))}</span>
                     <span>Status {html.escape(str(session.get('status', 'unknown')))}</span>
-                    <span class="raw-vision-status">Raw Vision: {raw_vision_status}</span>
+                  </div>
+                  <div class="mode-row">
+                    <span class="mode-invariants">Invariants: {invariants_status}</span>
+                    <span class="mode-hybrid">Hybrid: {hybrid_status}</span>
+                    <span class="mode-vision">Vision: {vision_status}</span>
                   </div>
                 </div>
               </a>
@@ -610,6 +622,30 @@ def _render_gallery_html(sessions: list[Dict[str, Any]]) -> str:
       background: rgba(182, 84, 42, 0.12);
       color: #b6542a;
     }}
+    .mode-row {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }}
+    .mode-row span {{
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }}
+    .mode-invariants {{
+      background: rgba(25, 92, 89, 0.12);
+      color: var(--accent);
+    }}
+    .mode-hybrid {{
+      background: rgba(108, 67, 156, 0.12);
+      color: #6c439c;
+    }}
+    .mode-vision {{
+      background: rgba(182, 84, 42, 0.12);
+      color: #b6542a;
+    }}
     .card {{
       position: relative;
     }}
@@ -678,6 +714,24 @@ def _render_gallery_html(sessions: list[Dict[str, Any]]) -> str:
       background: var(--muted);
       cursor: not-allowed;
     }}
+    .batch-controls .btn-invariants {{
+      background: var(--accent);
+    }}
+    .batch-controls .btn-invariants:hover {{
+      background: #144a47;
+    }}
+    .batch-controls .btn-hybrid {{
+      background: #6c439c;
+    }}
+    .batch-controls .btn-hybrid:hover {{
+      background: #5a3585;
+    }}
+    .batch-controls .btn-vision {{
+      background: #b6542a;
+    }}
+    .batch-controls .btn-vision:hover {{
+      background: #9a4624;
+    }}
     .batch-status {{
       color: var(--muted);
       font-size: 14px;
@@ -704,7 +758,9 @@ def _render_gallery_html(sessions: list[Dict[str, Any]]) -> str:
     <p class="lede">Each capture is stored as a session pair: microscope image, raw JSON report, and a browser-ready HTML viewer. Open any card to inspect the full MMSS decision trace.</p>
     
     <div class="batch-controls">
-      <button id="batchVisionBtn" onclick="runBatchVision()">Run Mistral Raw Vision on Selected</button>
+      <button class="btn-invariants" onclick="runBatchAnalysis('invariants')">Run Invariants on Selected</button>
+      <button class="btn-hybrid" onclick="runBatchAnalysis('hybrid')">Run Hybrid on Selected</button>
+      <button class="btn-vision" onclick="runBatchAnalysis('vision_only')">Run Vision Only on Selected</button>
       <span id="batchStatus" class="batch-status">Select images to analyze</span>
       <div class="batch-progress">
         <div id="batchProgressBar" class="batch-progress-bar"></div>
@@ -717,48 +773,54 @@ def _render_gallery_html(sessions: list[Dict[str, Any]]) -> str:
   </main>
   
   <script>
-    async function runBatchVision() {{
+    async function runBatchAnalysis(mode) {{
       const checkboxes = document.querySelectorAll('.session-checkbox:checked');
       if (checkboxes.length === 0) {{
         alert('Please select at least one image');
         return;
       }}
       
-      const btn = document.getElementById('batchVisionBtn');
+      const buttons = document.querySelectorAll('.batch-controls button');
       const status = document.getElementById('batchStatus');
       const progressBar = document.getElementById('batchProgressBar');
       
-      btn.disabled = true;
+      buttons.forEach(btn => btn.disabled = true);
       const sessionIds = Array.from(checkboxes).map(cb => cb.value);
       
       for (let i = 0; i < sessionIds.length; i++) {{
         const sessionId = sessionIds[i];
-        status.textContent = `Processing ${{i + 1}}/${{sessionIds.length}}: ${{sessionId}}`;
+        status.textContent = `Processing ${{i + 1}}/${{sessionIds.length}} (${{mode}}): ${{sessionId}}`;
         progressBar.style.width = `${{((i + 1) / sessionIds.length) * 100}}%`;
         
         try {{
-          const response = await fetch('/api/batch-vision', {{
+          const response = await fetch('/api/batch-analysis', {{
             method: 'POST',
             headers: {{ 'Content-Type': 'application/json' }},
-            body: JSON.stringify({{ session_id: sessionId }})
+            body: JSON.stringify({{ session_id: sessionId, mode: mode }})
           }});
           
           if (response.ok) {{
             const result = await response.json();
-            console.log('Vision result:', result);
+            console.log('Analysis result:', result);
             // Update card status
             const card = document.querySelector(`[data-session-id="${{sessionId}}"]`);
             if (card) {{
-              const statusSpan = card.querySelector('.raw-vision-status');
+              let statusClass = '';
+              if (mode === 'invariants') statusClass = '.mode-invariants';
+              else if (mode === 'hybrid') statusClass = '.mode-hybrid';
+              else if (mode === 'vision_only') statusClass = '.mode-vision';
+              
+              const statusSpan = card.querySelector(statusClass);
               if (statusSpan) {{
-                statusSpan.textContent = 'Raw Vision: ✓';
+                const modeName = mode === 'vision_only' ? 'Vision' : mode.charAt(0).toUpperCase() + mode.slice(1);
+                statusSpan.textContent = `${{modeName}}: ✓`;
               }}
             }}
           }} else {{
-            console.error('Vision failed for', sessionId);
+            console.error('Analysis failed for', sessionId, mode);
           }}
         }} catch (error) {{
-          console.error('Error processing', sessionId, error);
+          console.error('Error processing', sessionId, mode, error);
         }}
         
         // 30 second delay between requests
@@ -767,8 +829,8 @@ def _render_gallery_html(sessions: list[Dict[str, Any]]) -> str:
         }}
       }}
       
-      status.textContent = `Completed ${{sessionIds.length}} images`;
-      btn.disabled = false;
+      status.textContent = `Completed ${{sessionIds.length}} images (${{mode}})`;
+      buttons.forEach(btn => btn.disabled = false);
       setTimeout(() => location.reload(), 2000);
     }}
   </script>

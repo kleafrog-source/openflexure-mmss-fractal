@@ -24,21 +24,27 @@ class APIHandler(SimpleHTTPRequestHandler):
     
     def do_POST(self):
         """Handle POST requests for API endpoints."""
-        if self.path == "/api/batch-vision":
-            self.handle_batch_vision()
+        if self.path == "/api/batch-analysis":
+            self.handle_batch_analysis()
         else:
             self.send_error(404, "API endpoint not found")
     
-    def handle_batch_vision(self):
-        """Handle batch Mistral vision analysis request."""
+    def handle_batch_analysis(self):
+        """Handle batch analysis request for any mode."""
         try:
             content_length = int(self.headers["Content-Length"])
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode("utf-8"))
             
             session_id = data.get("session_id")
+            mode = data.get("mode", "invariants")
+            
             if not session_id:
                 self.send_error(400, "Missing session_id")
+                return
+            
+            if mode not in ["invariants", "hybrid", "vision_only"]:
+                self.send_error(400, "Invalid mode")
                 return
             
             # Find session manifest
@@ -55,33 +61,46 @@ class APIHandler(SimpleHTTPRequestHandler):
                 self.send_error(404, "Image not found")
                 return
             
-            # Run vision analysis
+            # Run analysis based on mode
             from src.mmss.mmss_engine import MMSS_Engine
             
             os.environ["USE_REAL_MICROSCOPE"] = "False"
             os.environ["MMSS_SAFETY_MODE_ACTIVE"] = "True"
-            os.environ["MMSS_ANALYSIS_MODE"] = "vision_only"
+            os.environ["MMSS_ANALYSIS_MODE"] = mode
             
             engine = MMSS_Engine(config={})
-            vision_result = engine._analyze_raw_image_with_mistral(image_path)
             
-            if not vision_result:
-                # Retry once on failure
-                time.sleep(5)
+            if mode == "vision_only":
+                # Single vision call
                 vision_result = engine._analyze_raw_image_with_mistral(image_path)
+                if not vision_result:
+                    time.sleep(5)
+                    vision_result = engine._analyze_raw_image_with_mistral(image_path)
+                analysis_result = {"vision_analysis": vision_result}
+            else:
+                # Full analysis for invariants/hybrid
+                analysis_result = engine.run(image_path)
             
-            # Update report with raw_vision block
+            # Update report with mode-specific block
             if report_path and Path(report_path).exists():
                 with open(report_path, "r", encoding="utf-8") as f:
                     report = json.load(f)
                 
-                report["raw_vision"] = vision_result
+                # Store result in mode-specific block
+                if mode == "invariants":
+                    report["invariants_analysis"] = analysis_result
+                    manifest["has_invariants"] = True
+                elif mode == "hybrid":
+                    report["hybrid_analysis"] = analysis_result
+                    manifest["has_hybrid"] = True
+                elif mode == "vision_only":
+                    report["vision_only_analysis"] = analysis_result
+                    manifest["has_vision_only"] = True
                 
                 with open(report_path, "w", encoding="utf-8") as f:
                     json.dump(report, f, indent=2, ensure_ascii=False, default=str)
                 
                 # Update manifest
-                manifest["raw_vision"] = vision_result is not None
                 manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
             
             # Rebuild gallery to update status
@@ -90,11 +109,11 @@ class APIHandler(SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            response = {"success": vision_result is not None, "raw_vision": vision_result}
+            response = {"success": True, "mode": mode, "result": analysis_result}
             self.wfile.write(json.dumps(response).encode("utf-8"))
             
         except Exception as e:
-            print(f"Error in batch vision: {e}")
+            print(f"Error in batch analysis: {e}")
             import traceback
             traceback.print_exc()
             self.send_error(500, str(e))
