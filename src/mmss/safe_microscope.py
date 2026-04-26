@@ -201,6 +201,46 @@ class SafeMicroscopeWrapper:
             # Получить Action объект из ответа
             data = response.json()
             
+            # Если действие запущено асинхронно (status: 'running'), нужно подождать
+            action_id = data.get('id')
+            action_status = data.get('status')
+            
+            if action_status == 'running':
+                logger.info(f"⏳ Action {action_id} is running, waiting for completion...")
+                
+                # Опрашивать статус действия
+                import time
+                max_wait = 30  # секунд
+                start_time = time.time()
+                
+                while time.time() - start_time < max_wait:
+                    time.sleep(0.5)
+                    
+                    status_response = requests.get(
+                        f"{self.server_url}/api/v2/actions/{action_id}",
+                        timeout=5
+                    )
+                    
+                    if status_response.status_code == 200:
+                        status_data = status_response.json()
+                        action_status = status_data.get('status')
+                        
+                        if action_status == 'completed':
+                            data = status_data
+                            logger.info("✅ Action completed")
+                            break
+                        elif action_status == 'error':
+                            logger.error(f"❌ Action failed: {status_data.get('log', [])}")
+                            return None
+                        else:
+                            logger.debug(f"⏳ Status: {action_status}")
+                    else:
+                        logger.error(f"❌ Failed to get action status: {status_response.status_code}")
+                        return None
+                else:
+                    logger.error("❌ Action timeout")
+                    return None
+            
             # Action возвращает output с Capture объектом
             capture = data.get('output')
             if not capture:
