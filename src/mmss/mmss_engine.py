@@ -11,6 +11,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 from mistralai.client import MistralClient
+import httpx
 import datetime
 import cv2
 
@@ -70,11 +71,17 @@ class MMSS_Engine:
         from .fractal_detectors import FractalClassifier
         self.fractal_classifier = FractalClassifier()
 
-        # Initialize Mistral client
+        # Initialize Mistral client with extended timeout for vision calls
         self.mistral_api_key = os.getenv('MISTRAL_API_KEY')
         if self.mistral_api_key:
             try:
-                self.mistral_client = MistralClient(api_key=self.mistral_api_key)
+                # Configure httpx client with longer timeouts for vision calls
+                timeout = httpx.Timeout(60.0, connect=10.0)
+                self.mistral_client = MistralClient(
+                    api_key=self.mistral_api_key,
+                    timeout=timeout
+                )
+                logger.info("Mistral client initialized with extended timeout (60s)")
             except Exception as e:
                 logger.error(f"Failed to initialize Mistral client: {e}")
                 self.mistral_client = None
