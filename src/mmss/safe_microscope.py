@@ -102,7 +102,10 @@ class SafeMicroscopeWrapper:
                 },
                 timeout=10
             )
-            response.raise_for_status()
+            
+            if not self._validate_response(response, "SET_LIGHT_SPECTRUM"):
+                return False
+            
             logger.info(f"✅ Light set to {wavelength}nm at {power}%")
             return True
         except Exception as e:
@@ -137,7 +140,10 @@ class SafeMicroscopeWrapper:
                 json={'distance_um': distance_um},
                 timeout=10
             )
-            response.raise_for_status()
+            
+            if not self._validate_response(response, "MOVE_Z"):
+                return False
+            
             logger.info(f"✅ Z moved by {distance_um}μm")
             return True
         except Exception as e:
@@ -168,7 +174,10 @@ class SafeMicroscopeWrapper:
                 json={'x_um': x_um, 'y_um': y_um},
                 timeout=10
             )
-            response.raise_for_status()
+            
+            if not self._validate_response(response, "MOVE_XY"):
+                return False
+            
             logger.info(f"✅ XY moved to ({x_um}, {y_um})μm")
             return True
         except Exception as e:
@@ -199,7 +208,9 @@ class SafeMicroscopeWrapper:
                 json={'width': resolution[0], 'height': resolution[1]},
                 timeout=30
             )
-            response.raise_for_status()
+            
+            if not self._validate_response(response, "CAPTURE_IMAGE"):
+                return None
             
             # Сохранить изображение
             output_path = f"output/{filename}"
@@ -236,3 +247,49 @@ class SafeMicroscopeWrapper:
         """Clear command log"""
         self.command_log.clear()
         logger.info("📝 Command log cleared")
+    
+    def _validate_response(self, response: requests.Response, operation: str) -> bool:
+        """
+        Validate HTTP response from server.
+        
+        Args:
+            response: requests.Response object
+            operation: Name of operation for error messages
+            
+        Returns:
+            True if response is valid, False otherwise
+        """
+        if response.status_code >= 400:
+            logger.error(f"❌ {operation} failed with status {response.status_code}")
+            try:
+                error_data = response.json()
+                logger.error(f"   Error details: {error_data}")
+            except:
+                logger.error(f"   Response: {response.text[:200]}")
+            return False
+        
+        try:
+            # Проверить что ответ это JSON
+            response.json()
+            return True
+        except ValueError:
+            logger.error(f"❌ {operation} returned invalid JSON")
+            logger.error(f"   Response: {response.text[:200]}")
+            return False
+    
+    def _validate_json_schema(self, data: Dict, required_fields: List[str]) -> bool:
+        """
+        Validate JSON response has required fields.
+        
+        Args:
+            data: JSON data as dictionary
+            required_fields: List of required field names
+            
+        Returns:
+            True if all fields present, False otherwise
+        """
+        missing = [field for field in required_fields if field not in data]
+        if missing:
+            logger.error(f"❌ Missing required fields: {missing}")
+            return False
+        return True

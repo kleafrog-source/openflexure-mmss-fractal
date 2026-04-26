@@ -50,8 +50,11 @@ def test_status(scope):
         print("✅ Status received:")
         for key, value in status.items():
             print(f"   {key}: {value}")
+        print(f"\n🛡️  Safe Mode: {'ENABLED' if scope.safe_mode else 'DISABLED'}")
+        print(f"📝 Commands logged: {len(scope.get_command_log())}")
     else:
         print("⚠️  Could not get status (server may not have microscope connected)")
+        print("💡 Try running: python check_microscope.py --url http://localhost:5000")
 
 def main():
     print("=" * 60)
