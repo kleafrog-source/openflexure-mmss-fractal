@@ -5,11 +5,14 @@ Orchestrates the bi-directional, iterative control loop.
 import os
 import json
 import logging
+import base64
 from typing import Dict, Any
+from pathlib import Path
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 from mistralai.client import MistralClient
 import datetime
+import cv2
 
 from .safe_microscope import SafeMicroscopeWrapper
 from .openflexure_mock import MockOpenFlexureAPI
@@ -34,6 +37,15 @@ class MMSS_Engine:
         """
         self.config = config
         self.safety_mode_active = os.getenv('MMSS_SAFETY_MODE_ACTIVE', 'False').lower() == 'true'
+        self.analysis_mode = os.getenv('MMSS_ANALYSIS_MODE', 'invariants').lower()
+        if self.analysis_mode not in {'invariants', 'hybrid', 'vision_only'}:
+            logger.warning("Unknown MMSS_ANALYSIS_MODE=%s, falling back to 'invariants'", self.analysis_mode)
+            self.analysis_mode = 'invariants'
+        self.vision_enabled = self.analysis_mode in {'hybrid', 'vision_only'}
+        self.vision_model = os.getenv('MISTRAL_VISION_MODEL', 'mistral-small-latest')
+        self.vision_max_size = int(os.getenv('MISTRAL_VISION_MAX_SIZE', '1024'))
+        self.vision_retry_count = int(os.getenv('MISTRAL_VISION_RETRY_COUNT', '3'))
+        self._vision_cache: Dict[str, Any] = {}
         
         # Использовать mock API для разработки (без реального микроскопа)
         # Для реального микроскопа использовать SafeMicroscopeWrapper
@@ -102,6 +114,8 @@ class MMSS_Engine:
             "iterations": [],
             "final_formula": None,
             "final_metrics": None,
+            "vision_analysis": None,
+            "analysis_mode": self.analysis_mode,
             "timestamp": datetime.datetime.now().isoformat(),
             "image_path": initial_image_path,
             "report_path": report_path,
@@ -123,6 +137,8 @@ class MMSS_Engine:
                 
                 # Step A: Capture & Atomization (simulated for now)
                 mmss_atoms = self._capture_and_atomize(current_image_path)
+                if mmss_atoms.get("vision_analysis"):
+                    results["vision_analysis"] = mmss_atoms.get("vision_analysis")
 
                 # Step B: Hypothesis Generation (Mistral API call)
                 mistral_response = self._generate_hypothesis(mmss_atoms)
@@ -178,6 +194,7 @@ class MMSS_Engine:
                     "command_executed": None,
                     "formula": candidate_formula,
                     "v_stability_counter": v_stability_counter,
+                    "vision_analysis": mmss_atoms.get("vision_analysis"),
                     "timestamp": datetime.datetime.now().isoformat()
                 }
                 results["iterations"].append(iteration_data)
@@ -215,6 +232,7 @@ class MMSS_Engine:
                     "D_f": best_iteration["mmss_atoms"].get("D_f", 0),
                     "R_T": best_iteration["mmss_atoms"].get("R_T", 0),
                     "detected_type": best_iteration["mmss_atoms"].get("detected_type"),
+                    "detected_source": best_iteration["mmss_atoms"].get("detected_source"),
                     "branching_angle": best_iteration["mmss_atoms"].get("branching_angle"),
                     "mean_curvature": best_iteration["mmss_atoms"].get("mean_curvature")
                 }
@@ -224,7 +242,9 @@ class MMSS_Engine:
                     "V": last_v,
                     "S": mmss_atoms.get("S", 0),
                     "D_f": mmss_atoms.get("D_f", 0),
-                    "R_T": mmss_atoms.get("R_T", 0)
+                    "R_T": mmss_atoms.get("R_T", 0),
+                    "detected_type": mmss_atoms.get("detected_type"),
+                    "detected_source": mmss_atoms.get("detected_source"),
                 }
                 results["final_formula"] = candidate_formula
                 results["final_metrics"] = final_metrics
@@ -325,18 +345,50 @@ class MMSS_Engine:
                 fractal_category = match.category
                 symmetry = f"{match.category}_{match.fractal_type.replace(' ', '_')}"
                 microscopy_advice = match.microscopy_advice
+                detected_source = "geometric_invariants"
                 logger.info(f"✓ Fractal classified: {detected_type} (conf: {match.confidence:.2f})")
             else:
                 # Fallback на старую логику из measure_invariants
                 detected_type = invariants.get('detected_type')
                 symmetry = invariants.get('symmetry_approx', 'C1')
                 microscopy_advice = invariants.get('microscopy_advice', {})
+                detected_source = "invariant_fallback" if detected_type else "none"
                 if detected_type:
                     logger.info(f"Fractal detected from invariants: {detected_type}")
                 else:
                     logger.info(f"Fractal not classified. Using fallback symmetry: {symmetry}")
             
             # Basic statistics на оригинальном ROI
+            vision_analysis = None
+            if self.vision_enabled:
+                vision_analysis = self._analyze_raw_image_with_mistral(image_path)
+                vision_object_guess = None
+                if vision_analysis:
+                    vision_object_guess = vision_analysis.get("object_guess") or vision_analysis.get("focus_guess")
+                    if not vision_object_guess or str(vision_object_guess).lower() == "unknown":
+                        vision_object_guess = vision_analysis.get("category_guess")
+                
+                # In vision_only mode, Mistral result is primary and overrides geometric classification
+                if self.analysis_mode == "vision_only" and vision_analysis and vision_object_guess:
+                    detected_type = vision_object_guess
+                    fractal_category = vision_analysis.get("category_guess", fractal_category or "BIOLOGICAL")
+                    detected_source = "mistral_raw_vision"
+                    microscopy_advice = dict(microscopy_advice)
+                    summary = vision_analysis.get("summary") or vision_analysis.get("biological_interpretation")
+                    if summary:
+                        microscopy_advice["vision_note"] = summary
+                    logger.info(f"vision_only mode: Using Mistral classification: {detected_type}")
+                # In hybrid mode, use Mistral as fallback if geometric classification failed
+                elif self.analysis_mode == "hybrid" and vision_analysis and not detected_type and vision_object_guess:
+                    detected_type = vision_object_guess
+                    fractal_category = vision_analysis.get("category_guess", fractal_category or "BIOLOGICAL")
+                    detected_source = "mistral_raw_vision"
+                    microscopy_advice = dict(microscopy_advice)
+                    summary = vision_analysis.get("summary") or vision_analysis.get("biological_interpretation")
+                    if summary:
+                        microscopy_advice["vision_note"] = summary
+                    logger.info(f"hybrid mode: Using Mistral as fallback: {detected_type}")
+
             mean_intensity = np.mean(roi_image) / 255.0
             std_intensity = np.std(roi_image) / 255.0
             
@@ -400,6 +452,8 @@ class MMSS_Engine:
                     category = "CURVE"
                 elif "Spiral" in detected_type or "Mandelbrot" in detected_type or "Julia" in detected_type:
                     category = "SET"
+                elif any(term in detected_type for term in ["Fern", "Vascular", "root", "Coral", "Radial biological", "Mycelium", "biofilm"]):
+                    category = "BIOLOGICAL"
                 elif "Crystal" in detected_type:
                     category = "CRYSTALLINE"
                 else:
@@ -419,9 +473,11 @@ class MMSS_Engine:
                 "language_atoms": language_atoms,
                 "structural_relations": structural_relations,
                 "detected_type": detected_type,
+                "detected_source": detected_source,
                 "microscopy_advice": microscopy_advice,
                 "branching_angle": float(invariants.get('branching_angle', 0)),
-                "mean_curvature": float(invariants.get('mean_curvature', 0))
+                "mean_curvature": float(invariants.get('mean_curvature', 0)),
+                "vision_analysis": vision_analysis
             }
             
             # Save successful atoms for fallback
@@ -440,7 +496,9 @@ class MMSS_Engine:
             "D_f": 1.8,
             "R_T": 2.0,
             "language_atoms": ["default_atom1", "default_atom2"],
-            "structural_relations": ["default_rel1"]
+            "structural_relations": ["default_rel1"],
+            "detected_source": "default_fallback",
+            "vision_analysis": None
         }
 
     def _calculate_topology_ratio(self, invariants: Dict) -> float:
@@ -497,6 +555,108 @@ class MMSS_Engine:
         json_str = json_str.replace('\\_', '\\\\_')
         return json_str
 
+    def _extract_json_payload(self, response_text: str) -> Dict[str, Any]:
+        """Extract a JSON object from a model response."""
+        response_text = response_text.strip()
+        if "```json" in response_text:
+            response_text = response_text.split("```json", 1)[1].split("```", 1)[0].strip()
+        elif "```" in response_text:
+            response_text = response_text.split("```", 1)[1].split("```", 1)[0].strip()
+
+        return json.loads(response_text)
+
+    def _encode_image_for_vision(self, image_path: str) -> str | None:
+        """Resize and encode image for Mistral raw vision analysis."""
+        image = cv2.imread(image_path)
+        if image is None:
+            logger.warning("Vision analysis skipped: cannot load image %s", image_path)
+            return None
+
+        h, w = image.shape[:2]
+        max_dim = max(h, w)
+        if max_dim > self.vision_max_size:
+            scale = self.vision_max_size / max_dim
+            new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
+            image = cv2.resize(image, new_size, interpolation=cv2.INTER_AREA)
+
+        ok, encoded = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        if not ok:
+            logger.warning("Vision analysis skipped: JPEG encoding failed for %s", image_path)
+            return None
+
+        return base64.b64encode(encoded.tobytes()).decode("utf-8")
+
+    def _analyze_raw_image_with_mistral(self, image_path: str) -> Dict[str, Any] | None:
+        """
+        Send a resized but otherwise unprocessed image to Mistral vision so it can
+        suggest what is currently in microscope focus.
+        Uses caching and retry logic for reliability.
+        """
+        if not self.mistral_client:
+            return None
+
+        # Check cache first
+        image_key = str(Path(image_path).stat().st_mtime) + str(Path(image_path).stat().st_size)
+        if image_key in self._vision_cache:
+            logger.info("Using cached vision analysis for %s", image_path)
+            return self._vision_cache[image_key]
+
+        image_b64 = self._encode_image_for_vision(image_path)
+        if not image_b64:
+            return None
+
+        prompt = (
+            "You are analyzing a microscope image. The image is sent raw except for downscaling. "
+            "Return strict JSON with keys: object_guess, focus_quality, category_guess, biological_interpretation, "
+            "fractal_character, confidence, summary, visible_structures, recommended_followup. "
+            "Prefer broad, careful biological or organic morphology classes such as root-like, "
+            "vascular, pollen-like, fungal network, crystal-like, debris, or unknown. "
+            "Do not claim species-level identification."
+        )
+
+        # Retry logic with exponential backoff
+        import time
+        for attempt in range(self.vision_retry_count):
+            try:
+                chat_response = self.mistral_client.chat(
+                    model=self.vision_model,
+                    response_format={"type": "json_object"},
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": f"data:image/jpeg;base64,{image_b64}",
+                                },
+                            ],
+                        }
+                    ],
+                )
+                response_text = chat_response.choices[0].message.content
+                if isinstance(response_text, list):
+                    response_text = "".join(part.get("text", "") for part in response_text if isinstance(part, dict))
+                payload = self._extract_json_payload(str(response_text))
+                payload["mode"] = "mistral_raw_vision"
+                payload["model"] = self.vision_model
+                payload["image_resize_max"] = self.vision_max_size
+                
+                # Cache the result
+                self._vision_cache[image_key] = payload
+                logger.info("Vision analysis cached for %s", image_path)
+                
+                return payload
+            except Exception as exc:
+                logger.error("Mistral raw vision call failed (attempt %d/%d): %s", attempt + 1, self.vision_retry_count, exc)
+                if attempt < self.vision_retry_count - 1:
+                    backoff_time = (2 ** attempt) * 1  # Exponential backoff: 1s, 2s, 4s
+                    logger.info("Retrying in %d seconds...", backoff_time)
+                    time.sleep(backoff_time)
+                else:
+                    logger.error("All retry attempts exhausted for vision analysis")
+                    return None
+
     def _generate_hypothesis(self, mmss_atoms: Dict[str, Any]) -> Dict[str, Any]:
         """
         Generates a hypothesis using the Mistral API with a Jinja2 template.
@@ -518,16 +678,9 @@ class MMSS_Engine:
             response_text = chat_response.choices[0].message.content
             logger.debug(f"Raw response: {response_text}")
 
-            # Extract JSON from markdown code block if present
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0].strip()
-                logger.debug(f"Extracted JSON: {response_text}")
-
-            # Fix LaTeX escapes
-            response_text = self._fix_latex_escapes(response_text)
-
             try:
-                return json.loads(response_text)
+                response_text = self._fix_latex_escapes(str(response_text))
+                return self._extract_json_payload(response_text)
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse JSON response: {e}")
                 logger.error(f"Response content: {response_text}")

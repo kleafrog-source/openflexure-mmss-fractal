@@ -12,7 +12,7 @@ class FractalMatch:
     """Результат поиска паттерна"""
     fractal_type: str
     confidence: float  # 0.0 to 1.0
-    category: str      # 'TREE', 'CURVE', 'SPACE_FILLING', 'SET', 'CRYSTALLINE'
+    category: str      # 'TREE', 'CURVE', 'SPACE_FILLING', 'SET', 'CRYSTALLINE', 'BIOLOGICAL'
     microscopy_advice: Dict[str, any]  # Советы для микроскопа (свет, фокус)
 
 
@@ -1096,6 +1096,157 @@ class BirefringentCrystalDetector(BaseDetector):
         return min(len(peaks) / 10, 1.0)
 
 
+class BioBranchingDetector(BaseDetector):
+    """
+    First-pass biological branching detector.
+    Targets fern-like venation, root/vascular trees, and coral-like colonies.
+    """
+
+    def detect(self, skeleton: np.ndarray, invariants: Dict) -> Optional[FractalMatch]:
+        import logging
+        from scipy.ndimage import convolve
+
+        logger = logging.getLogger(__name__)
+        dim = invariants.get('dimensionality', 0)
+        angle = invariants.get('branching_angle', 0)
+        curve = invariants.get('mean_curvature', 0)
+        aspect_ratio = invariants.get('aspect_ratio', 1.0)
+        repetition = invariants.get('repetition_score', 0)
+
+        if not (1.25 <= dim <= 1.9):
+            return None
+
+        mask = skeleton > 0
+        if not np.any(mask):
+            return None
+
+        neighbors = convolve(mask.astype(np.uint8), np.array([[1,1,1],[1,0,1],[1,1,1]]), mode='constant')
+        junction_density = np.sum(mask & (neighbors >= 3)) / max(np.sum(mask), 1)
+        endpoint_density = np.sum(mask & (neighbors == 1)) / max(np.sum(mask), 1)
+
+        logger.debug(
+            "BioBranchingDetector: dim=%.3f angle=%.1f curve=%.3f aspect=%.2f rep=%.3f junction=%.3f endpoint=%.3f",
+            dim, angle, curve, aspect_ratio, repetition, junction_density, endpoint_density,
+        )
+
+        if 1.35 <= dim <= 1.8 and 20 <= angle <= 75 and 0.01 <= junction_density <= 0.09:
+            if aspect_ratio > 1.2 and repetition > 0.02 and curve < 0.25:
+                return FractalMatch(
+                    "Fern-like leaflet / venation",
+                    0.82,
+                    "BIOLOGICAL",
+                    {
+                        'light': 530,
+                        'focus': 'mid_depth',
+                        'note': 'Likely plant-like vein or leaflet branching'
+                    }
+                )
+
+            if curve > 0.18 and endpoint_density > 0.015:
+                return FractalMatch(
+                    "Coral-like branching colony",
+                    0.80,
+                    "BIOLOGICAL",
+                    {
+                        'light': 450,
+                        'focus': 'surface_relief',
+                        'note': 'Irregular organic branching colony morphology'
+                    }
+                )
+
+            return FractalMatch(
+                "Vascular / root-like branching network",
+                0.78,
+                "BIOLOGICAL",
+                {
+                    'light': 530,
+                    'focus': 'wide_field',
+                    'note': 'Branching network resembles vessels, roots, or arborized tissue'
+                }
+            )
+
+        return None
+
+
+class BioRadialDetector(BaseDetector):
+    """
+    Detects simple radial bioforms such as pollen-like or radiolarian-like structures.
+    """
+
+    def detect(self, skeleton: np.ndarray, invariants: Dict) -> Optional[FractalMatch]:
+        symmetry = invariants.get('symmetry_approx', 'C1')
+        dim = invariants.get('dimensionality', 0)
+        curve = invariants.get('mean_curvature', 0)
+        repetition = invariants.get('repetition_score', 0)
+
+        if symmetry not in {'C5', 'C6', 'C8', 'C10', 'C12'}:
+            return None
+
+        if not (1.15 <= dim <= 1.85):
+            return None
+
+        if repetition > 0.03 or curve > 0.22:
+            return FractalMatch(
+                "Radial biological microform (pollen / radiolarian-like)",
+                0.79,
+                "BIOLOGICAL",
+                {
+                    'light': [450, 530],
+                    'focus': 'center',
+                    'note': 'Inspect radial spikes, pores, or shell-like boundaries'
+                }
+            )
+
+        return None
+
+
+class BioNetworkDetector(BaseDetector):
+    """
+    Detects diffuse reticulated networks such as mycelium, biofilm filaments,
+    or simple tissue mesh patterns.
+    """
+
+    def detect(self, skeleton: np.ndarray, invariants: Dict) -> Optional[FractalMatch]:
+        import logging
+        from scipy.ndimage import convolve
+
+        logger = logging.getLogger(__name__)
+        dim = invariants.get('dimensionality', 0)
+        curve = invariants.get('mean_curvature', 0)
+        angle = invariants.get('branching_angle', 0)
+        aspect_ratio = invariants.get('aspect_ratio', 1.0)
+
+        if not (1.45 <= dim <= 1.95):
+            return None
+
+        mask = skeleton > 0
+        if not np.any(mask):
+            return None
+
+        neighbors = convolve(mask.astype(np.uint8), np.array([[1,1,1],[1,0,1],[1,1,1]]), mode='constant')
+        junction_density = np.sum(mask & (neighbors >= 3)) / max(np.sum(mask), 1)
+        line_density = np.mean(mask)
+
+        logger.debug(
+            "BioNetworkDetector: dim=%.3f curve=%.3f angle=%.1f aspect=%.2f junction=%.3f line=%.3f",
+            dim, curve, angle, aspect_ratio, junction_density, line_density,
+        )
+
+        if curve > 0.16 and 35 <= angle <= 140 and 0.02 <= junction_density <= 0.14 and 0.02 <= line_density <= 0.22:
+            return FractalMatch(
+                "Mycelium / biofilm filament network",
+                0.77,
+                "BIOLOGICAL",
+                {
+                    'light': 450,
+                    'focus': 'high_contrast',
+                    'note': 'Diffuse reticulated network consistent with organic filament growth'
+                }
+            )
+
+        return None
+
+
 # --- OLD CRYSTALLINE DETECTOR (Fallback) ---
 class CrystallineDetector(BaseDetector):
     def detect(self, skeleton, invariants):
@@ -1133,6 +1284,9 @@ def run_detectors(skeleton: np.ndarray, invariants: Dict) -> Optional[FractalMat
         TSquareDetector(),
         MortonZDetector(),
         SetDetector(),
+        BioBranchingDetector(),
+        BioRadialDetector(),
+        BioNetworkDetector(),
         CrystallineDetector()
     ]
     
@@ -1164,6 +1318,11 @@ class FractalClassifier:
                 JuliaDetector(),
                 EisensteinDetector(),
                 SetDetector()  # Fallback detector
+            ],
+            "BIOLOGICAL": [
+                BioBranchingDetector(),
+                BioRadialDetector(),
+                BioNetworkDetector(),
             ],
             "CRYSTALLINE": [
                 DendriticCrystalDetector(),
@@ -1219,6 +1378,13 @@ class FractalClassifier:
                 return match
         
         # 5. Кристаллические
+        for detector in self.detectors.get("BIOLOGICAL", []):
+            match = detector.detect(skeleton, invariants)
+            logger.info(f"Biological detector {detector.__class__.__name__} result: {match}")
+            if match and match.confidence > 0.7:
+                logger.info(f"вњ“ Biological detected: {match.fractal_type}")
+                return match
+
         for detector in self.detectors.get("CRYSTALLINE", []):
             match = detector.detect(skeleton, invariants)
             logger.info(f"Crystalline detector {detector.__class__.__name__} result: {match}")
