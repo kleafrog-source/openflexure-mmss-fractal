@@ -5,7 +5,7 @@ All commands go through safety checks before execution.
 import requests
 import time
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ class SafeMicroscopeWrapper:
         
         # Проверка доступности сервера (WoT API)
         try:
-            response = requests.get(f"{self.server_url}/api/v2", timeout=5)
+            response = requests.get(f"{self.server_url}/api/v2", timeout=10)
             if response.status_code == 200:
                 logger.info(f"✅ Connected to OpenFlexure Microscope Server at {server_url}")
             else:

@@ -1,26 +1,31 @@
 #!/usr/bin/env python
 """
-Test integration with OpenFlexure Management Server.
+Test integration with OpenFlexure Microscope Server.
 """
 import sys
+import os
+from dotenv import load_dotenv
 from src.mmss.safe_microscope import SafeMicroscopeWrapper
 
+# Load environment variables
+load_dotenv('.env.local')
+
 def test_connection():
-    """Test connection to Management Server"""
-    print("🔌 Testing connection to Management Server...")
+    """Test connection to Microscope Server"""
+    print("🔌 Testing connection to Microscope Server...")
+    
+    server_url = os.getenv('MICROSCOPE_SERVER_URL', 'http://localhost:5000')
     
     try:
         scope = SafeMicroscopeWrapper(
-            server_url="http://localhost:8000",
+            server_url=server_url,
             safe_mode=True
         )
         print("✅ Connected successfully!")
         return scope
     except Exception as e:
         print(f"❌ Connection failed: {e}")
-        print("\n📝 Make sure Management Server is running:")
-        print("   cd openflexure-management-server")
-        print("   python manage.py runserver 0.0.0.0:8000")
+        print(f"\n📝 Make sure Microscope Server is running at {server_url}")
         sys.exit(1)
 
 def test_safe_mode(scope):
