@@ -32,9 +32,9 @@ class SafeMicroscopeWrapper:
         self.safe_mode = safe_mode
         self.command_log = []
         
-        # Проверка доступности сервера (OpenFlexure API v2)
+        # Проверка доступности сервера (WoT API)
         try:
-            response = requests.get(f"{self.server_url}/api/v2/about", timeout=5)
+            response = requests.get(f"{self.server_url}/api/v2", timeout=5)
             if response.status_code == 200:
                 logger.info(f"✅ Connected to OpenFlexure Microscope Server at {server_url}")
             else:
@@ -117,11 +117,11 @@ class SafeMicroscopeWrapper:
             return True
         
         try:
-            # OpenFlexure API v2: /api/v2/move
+            # WoT API: /api/v2/actions/MoveAPI
             move_data = {'z': distance_um} if relative else {'z': distance_um, 'absolute': True}
             
             response = requests.post(
-                f"{self.server_url}/api/v2/move",
+                f"{self.server_url}/api/v2/actions/MoveAPI",
                 json=move_data,
                 timeout=10
             )
@@ -151,11 +151,11 @@ class SafeMicroscopeWrapper:
             return True
         
         try:
-            # OpenFlexure API v2: /api/v2/move
+            # WoT API: /api/v2/actions/MoveAPI
             move_data = {'x': x_um, 'y': y_um} if relative else {'x': x_um, 'y': y_um, 'absolute': True}
             
             response = requests.post(
-                f"{self.server_url}/api/v2/move",
+                f"{self.server_url}/api/v2/actions/MoveAPI",
                 json=move_data,
                 timeout=10
             )
@@ -188,9 +188,9 @@ class SafeMicroscopeWrapper:
             return fake_path
         
         try:
-            # OpenFlexure API v2: /api/v2/capture
+            # WoT API: /api/v2/actions/CaptureAPI
             response = requests.post(
-                f"{self.server_url}/api/v2/capture",
+                f"{self.server_url}/api/v2/actions/CaptureAPI",
                 json={'use_video_port': False},
                 timeout=30
             )
@@ -225,17 +225,17 @@ class SafeMicroscopeWrapper:
             return None
     
     def get_status(self) -> Optional[Dict]:
-        """Get microscope status from server (OpenFlexure API v2)"""
+        """Get microscope status from server (WoT API)"""
         try:
-            # Получить позицию
+            # Получить позицию через properties
             position_response = requests.get(
-                f"{self.server_url}/api/v2/position",
+                f"{self.server_url}/api/v2/properties/position",
                 timeout=5
             )
             
-            # Получить информацию о камере
+            # Получить информацию о камере через properties
             camera_response = requests.get(
-                f"{self.server_url}/api/v2/camera",
+                f"{self.server_url}/api/v2/properties/camera_settings",
                 timeout=5
             )
             

@@ -7,7 +7,7 @@ import requests
 import json
 import sys
 
-def check_microscope(server_url="http://localhost:5000"):
+def check_microscope(server_url="http://192.168.3.58:5000"):
     """
     Check if OpenFlexure Microscope Server is available.
     
@@ -21,50 +21,50 @@ def check_microscope(server_url="http://localhost:5000"):
     print("=" * 60)
     
     try:
-        # Проверка основного endpoint
-        print("1. Checking /api/v2/about endpoint...")
-        response = requests.get(f"{server_url}/api/v2/about", timeout=5)
+        # Проверка основного endpoint (WoT Thing Description)
+        print("1. Checking /api/v2 endpoint (Thing Description)...")
+        response = requests.get(f"{server_url}/api/v2", timeout=5)
         
         if response.status_code == 200:
             data = response.json()
             print(f"   ✅ Server is available")
-            print(f"   Version: {data.get('version', 'unknown')}")
-            print(f"   API: {data.get('api', 'unknown')}")
-            print(f"   Microscope: {data.get('microscope', {}).get('name', 'unknown')}")
+            print(f"   Type: {data.get('@type', ['unknown'])[0] if data.get('@type') else 'unknown'}")
+            print(f"   Actions: {len(data.get('actions', {}))} available")
+            print(f"   Properties: {len(data.get('properties', {}))} available")
         else:
             print(f"   ⚠️  Server returned status {response.status_code}")
             return False
             
-        # Проверка статуса микроскопа
-        print("\n2. Checking /api/v2/position endpoint...")
-        response = requests.get(f"{server_url}/api/v2/position", timeout=5)
+        # Проверка позиции через properties
+        print("\n2. Checking /api/v2/properties/position endpoint...")
+        response = requests.get(f"{server_url}/api/v2/properties/position", timeout=5)
         
         if response.status_code == 200:
             data = response.json()
-            print(f"   ✅ Microscope is connected")
-            print(f"   Position: X={data.get('x', 0):.2f}, Y={data.get('y', 0):.2f}, Z={data.get('z', 0):.2f}")
+            print(f"   ✅ Position property is available")
+            print(f"   Position: {data}")
         else:
             print(f"   ⚠️  Could not get position (status {response.status_code})")
             
-        # Проверка возможностей
-        print("\n3. Checking /api/v2/camera endpoint...")
-        response = requests.get(f"{server_url}/api/v2/camera", timeout=5)
+        # Проверка камеры через properties
+        print("\n3. Checking /api/v2/properties/camera_settings endpoint...")
+        response = requests.get(f"{server_url}/api/v2/properties/camera_settings", timeout=5)
         
         if response.status_code == 200:
             data = response.json()
-            print(f"   ✅ Camera is available")
-            print(f"   Resolution: {data.get('width', 'unknown')}x{data.get('height', 'unknown')}")
+            print(f"   ✅ Camera settings property is available")
+            print(f"   Settings: {data}")
         else:
-            print(f"   ⚠️  Could not get camera info (status {response.status_code})")
+            print(f"   ⚠️  Could not get camera settings (status {response.status_code})")
             
-        # Проверка перемещения
-        print("\n4. Checking /api/v2/move endpoint (read-only)...")
-        response = requests.get(f"{server_url}/api/v2/move", timeout=5)
+        # Проверка захвата через actions
+        print("\n4. Checking /api/v2/actions/CaptureAPI endpoint...")
+        response = requests.get(f"{server_url}/api/v2/actions/CaptureAPI", timeout=5)
         
         if response.status_code == 200:
-            print(f"   ✅ Move endpoint is available")
+            print(f"   ✅ Capture action is available")
         else:
-            print(f"   ⚠️  Move endpoint returned status {response.status_code}")
+            print(f"   ⚠️  Capture action returned status {response.status_code}")
             
         print("\n" + "=" * 60)
         print("✅ Microscope server is available and ready!")
