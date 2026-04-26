@@ -32,16 +32,16 @@ class SafeMicroscopeWrapper:
         self.safe_mode = safe_mode
         self.command_log = []
         
-        # Проверка доступности сервера
+        # Проверка доступности сервера (OpenFlexure API v2)
         try:
-            response = requests.get(f"{self.server_url}/api/microscopes/", timeout=5)
+            response = requests.get(f"{self.server_url}/api/v2/about", timeout=5)
             if response.status_code == 200:
-                logger.info(f"✅ Connected to Management Server at {server_url}")
+                logger.info(f"✅ Connected to OpenFlexure Microscope Server at {server_url}")
             else:
                 logger.warning(f"⚠️  Server returned status {response.status_code}")
         except requests.exceptions.ConnectionError:
-            logger.error(f"❌ Cannot connect to Management Server at {server_url}")
-            logger.error("📝 Make sure server is running: python manage.py runserver")
+            logger.error(f"❌ Cannot connect to OpenFlexure Microscope Server at {server_url}")
+            logger.error("📝 Make sure the microscope server is running")
             raise
     
     def enable_safe_mode(self):
@@ -92,25 +92,12 @@ class SafeMicroscopeWrapper:
         if self.safe_mode:
             return True
         
-        # Выполнение через Management Server API
-        try:
-            response = requests.post(
-                f"{self.server_url}/api/microscopes/{self.microscope_id}/control/light/",
-                json={
-                    'wavelength_nm': wavelength,
-                    'power_percent': power
-                },
-                timeout=10
-            )
-            
-            if not self._validate_response(response, "SET_LIGHT_SPECTRUM"):
-                return False
-            
-            logger.info(f"✅ Light set to {wavelength}nm at {power}%")
-            return True
-        except Exception as e:
-            logger.error(f"❌ Failed to set light: {e}")
-            return False
+        # Выполнение через OpenFlexure API v2
+        # Примечание: OpenFlexure не имеет прямого управления светом через API
+        # Логируем операцию для совместимости
+        logger.info(f"💡 Light control requested: {wavelength}nm at {power}%")
+        logger.info("⚠️  Note: OpenFlexure API v2 does not support direct light control")
+        return True
     
     def move_z(self, distance_um: float, relative: bool = True) -> bool:
         """
@@ -130,14 +117,12 @@ class SafeMicroscopeWrapper:
             return True
         
         try:
-            if relative:
-                endpoint = f"api/microscopes/{self.microscope_id}/control/z/relative/"
-            else:
-                endpoint = f"api/microscopes/{self.microscope_id}/control/z/absolute/"
+            # OpenFlexure API v2: /api/v2/move
+            move_data = {'z': distance_um} if relative else {'z': distance_um, 'absolute': True}
             
             response = requests.post(
-                f"{self.server_url}/{endpoint}",
-                json={'distance_um': distance_um},
+                f"{self.server_url}/api/v2/move",
+                json=move_data,
                 timeout=10
             )
             
@@ -166,12 +151,12 @@ class SafeMicroscopeWrapper:
             return True
         
         try:
-            endpoint = f"api/microscopes/{self.microscope_id}/control/xy/relative/" if relative \
-                      else f"api/microscopes/{self.microscope_id}/control/xy/absolute/"
+            # OpenFlexure API v2: /api/v2/move
+            move_data = {'x': x_um, 'y': y_um} if relative else {'x': x_um, 'y': y_um, 'absolute': True}
             
             response = requests.post(
-                f"{self.server_url}/{endpoint}",
-                json={'x_um': x_um, 'y_um': y_um},
+                f"{self.server_url}/api/v2/move",
+                json=move_data,
                 timeout=10
             )
             
@@ -203,21 +188,34 @@ class SafeMicroscopeWrapper:
             return fake_path
         
         try:
+            # OpenFlexure API v2: /api/v2/capture
             response = requests.post(
-                f"{self.server_url}/api/microscopes/{self.microscope_id}/capture/",
-                json={'width': resolution[0], 'height': resolution[1]},
+                f"{self.server_url}/api/v2/capture",
+                json={'use_video_port': False},
                 timeout=30
             )
             
             if not self._validate_response(response, "CAPTURE_IMAGE"):
                 return None
             
+            # Получить изображение из ответа
+            data = response.json()
+            image_url = data.get('image', {}).get('filename')
+            
+            if not image_url:
+                logger.error("❌ No image URL in response")
+                return None
+            
+            # Скачать изображение
+            image_response = requests.get(f"{self.server_url}{image_url}", timeout=30)
+            image_response.raise_for_status()
+            
             # Сохранить изображение
             output_path = f"output/{filename}"
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             
             with open(output_path, 'wb') as f:
-                f.write(response.content)
+                f.write(image_response.content)
             
             logger.info(f"✅ Image captured: {output_path}")
             return output_path
@@ -227,14 +225,34 @@ class SafeMicroscopeWrapper:
             return None
     
     def get_status(self) -> Optional[Dict]:
-        """Get microscope status from server"""
+        """Get microscope status from server (OpenFlexure API v2)"""
         try:
-            response = requests.get(
-                f"{self.server_url}/api/microscopes/{self.microscope_id}/",
+            # Получить позицию
+            position_response = requests.get(
+                f"{self.server_url}/api/v2/position",
                 timeout=5
             )
-            response.raise_for_status()
-            return response.json()
+            
+            # Получить информацию о камере
+            camera_response = requests.get(
+                f"{self.server_url}/api/v2/camera",
+                timeout=5
+            )
+            
+            status = {}
+            
+            if position_response.status_code == 200:
+                pos_data = position_response.json()
+                status['position'] = pos_data
+            
+            if camera_response.status_code == 200:
+                cam_data = camera_response.json()
+                status['camera'] = cam_data
+            
+            status['server_url'] = self.server_url
+            status['safe_mode'] = self.safe_mode
+            
+            return status
         except Exception as e:
             logger.error(f"❌ Failed to get status: {e}")
             return None

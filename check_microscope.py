@@ -30,6 +30,7 @@ def check_microscope(server_url="http://localhost:5000"):
             print(f"   ✅ Server is available")
             print(f"   Version: {data.get('version', 'unknown')}")
             print(f"   API: {data.get('api', 'unknown')}")
+            print(f"   Microscope: {data.get('microscope', {}).get('name', 'unknown')}")
         else:
             print(f"   ⚠️  Server returned status {response.status_code}")
             return False
@@ -55,6 +56,15 @@ def check_microscope(server_url="http://localhost:5000"):
             print(f"   Resolution: {data.get('width', 'unknown')}x{data.get('height', 'unknown')}")
         else:
             print(f"   ⚠️  Could not get camera info (status {response.status_code})")
+            
+        # Проверка перемещения
+        print("\n4. Checking /api/v2/move endpoint (read-only)...")
+        response = requests.get(f"{server_url}/api/v2/move", timeout=5)
+        
+        if response.status_code == 200:
+            print(f"   ✅ Move endpoint is available")
+        else:
+            print(f"   ⚠️  Move endpoint returned status {response.status_code}")
             
         print("\n" + "=" * 60)
         print("✅ Microscope server is available and ready!")
@@ -82,10 +92,9 @@ def main():
     
     if check_microscope(args.url):
         print("\n📝 Next steps:")
-        print("   1. Copy .env.example to .env.local")
-        print("   2. Set USE_REAL_MICROSCOPE=False (for testing)")
-        print("   3. Set MICROSCOPE_SERVER_URL=" + args.url)
-        print("   4. Run: python test_integration.py")
+        print("   1. .env.local is already configured with microscope URL")
+        print("   2. Run: python test_integration.py")
+        print("   3. When ready, set MMSS_SAFETY_MODE_ACTIVE=False in .env.local")
         sys.exit(0)
     else:
         print("\n📝 Troubleshooting:")
