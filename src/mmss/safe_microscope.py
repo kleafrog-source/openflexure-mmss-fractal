@@ -188,22 +188,41 @@ class SafeMicroscopeWrapper:
             return fake_path
         
         try:
-            # WoT API: /api/v2/actions/CaptureAPI
-            response = requests.post(
+            # WoT API: пробуем разные методы для захвата
+            # Сначала пробуем PUT (стандарт для WoT actions)
+            response = requests.put(
                 f"{self.server_url}/api/v2/actions/CaptureAPI",
-                json={'use_video_port': False},
+                json={},
                 timeout=30
             )
+            
+            # Если PUT не работает, пробуем POST
+            if response.status_code == 405:
+                logger.info("PUT not allowed, trying POST...")
+                response = requests.post(
+                    f"{self.server_url}/api/v2/actions/CaptureAPI",
+                    json={},
+                    timeout=30
+                )
             
             if not self._validate_response(response, "CAPTURE_IMAGE"):
                 return None
             
             # Получить изображение из ответа
             data = response.json()
-            image_url = data.get('image', {}).get('filename')
+            
+            # WoT API возвращает разные форматы, проверяем несколько вариантов
+            image_url = None
+            if 'image' in data:
+                image_url = data['image'].get('filename')
+            elif 'filename' in data:
+                image_url = data['filename']
+            elif 'result' in data and 'filename' in data['result']:
+                image_url = data['result']['filename']
             
             if not image_url:
                 logger.error("❌ No image URL in response")
+                logger.error(f"Response data: {data}")
                 return None
             
             # Скачать изображение
