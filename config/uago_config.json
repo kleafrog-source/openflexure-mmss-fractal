@@ -1,0 +1,15 @@
+{
+  "max_cycles": 3,
+  "similarity_threshold": 0.95,
+  "use_mistral_api": false,
+  "mistral_model": "mistral-large-latest",
+  "visualization": {
+    "width": 500,
+    "height": 500,
+    "output_dir": "output/visualizations"
+  },
+  "invariant_measurement": {
+    "box_counting_levels": 5,
+    "symmetry_angles": [0, 30, 45, 60, 90, 120, 180]
+  }
+}

@@ -1,0 +1,597 @@
+"""
+Core engine for the MMSS-Alpha-Formula (v2.0) architecture.
+Orchestrates the bi-directional, iterative control loop.
+"""
+import os
+import json
+import logging
+from typing import Dict, Any
+from dotenv import load_dotenv
+from jinja2 import Environment, FileSystemLoader
+from mistralai.client import MistralClient
+import datetime
+
+from .safe_microscope import SafeMicroscopeWrapper
+from .openflexure_mock import MockOpenFlexureAPI
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Load environment variables from .env file
+load_dotenv()
+
+class MMSS_Engine:
+    """
+    The MMSS-Engine orchestrates the iterative control loop for meta-formula synthesis.
+    """
+    def __init__(self, config: Dict[str, Any]):
+        """
+        Initializes the MMSS-Engine.
+
+        Args:
+            config: A dictionary containing the configuration for the engine.
+        """
+        self.config = config
+        self.safety_mode_active = os.getenv('MMSS_SAFETY_MODE_ACTIVE', 'False').lower() == 'true'
+        
+        # Использовать mock API для разработки (без реального микроскопа)
+        # Для реального микроскопа использовать SafeMicroscopeWrapper
+        use_real_microscope = os.getenv('USE_REAL_MICROSCOPE', 'False').lower() == 'true'
+        
+        if use_real_microscope:
+            self.microscope = SafeMicroscopeWrapper(
+                server_url=os.getenv('MICROSCOPE_SERVER_URL', 'http://localhost:5000'),
+                microscope_id=int(os.getenv('MICROSCOPE_ID', '1')),
+                safe_mode=True
+            )
+            logger.info("🔌 Using real microscope via SafeMicroscopeWrapper")
+        else:
+            self.microscope = MockOpenFlexureAPI()
+            logger.info("🎭 Using mock microscope API (development mode)")
+        
+        self.max_iterations = 3
+        self._last_successful_atoms = None
+        self.MAX_Z_MOVEMENT = 50  # Maximum Z movement in microns
+
+        # Initialize FractalClassifier
+        from .fractal_detectors import FractalClassifier
+        self.fractal_classifier = FractalClassifier()
+
+        # Initialize Mistral client
+        self.mistral_api_key = os.getenv('MISTRAL_API_KEY')
+        if self.mistral_api_key:
+            try:
+                self.mistral_client = MistralClient(api_key=self.mistral_api_key)
+            except Exception as e:
+                logger.error(f"Failed to initialize Mistral client: {e}")
+                self.mistral_client = None
+        else:
+            self.mistral_client = None
+            logger.warning("MISTRAL_API_KEY not found. Mistral API calls will be simulated.")
+
+        # Initialize Jinja2 environment
+        self.jinja_env = Environment(loader=FileSystemLoader('src/mmss/'))
+
+        if self.safety_mode_active:
+            logger.info("MMSS_SAFETY_MODE_ACTIVE is True. Microscope commands will be simulated.")
+
+    def run(self, initial_image_path: str) -> Dict[str, Any]:
+        """
+        Runs the iterative control loop to derive a meta-formula.
+
+        Args:
+            initial_image_path: The path to the initial image for analysis.
+
+        Returns:
+            A dictionary containing the final result of the analysis.
+        """
+        logger.info("Starting MMSS-Alpha-Formula (v2.0) run.")
+        
+        # Create output directory if it doesn't exist
+        os.makedirs('output/reports', exist_ok=True)
+        
+        # Generate base filename with timestamp
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        image_name = os.path.splitext(os.path.basename(initial_image_path))[0]
+        report_filename = f'mmss_alpha_formula_result_{image_name}_{timestamp}.json'
+        report_path = os.path.join('output', 'reports', report_filename)
+        
+        # Initialize results dictionary
+        results = {
+            "iterations": [],
+            "final_formula": None,
+            "final_metrics": None,
+            "timestamp": datetime.datetime.now().isoformat(),
+            "image_path": initial_image_path,
+            "report_path": report_path,
+            "status": "running"
+        }
+        
+        # Save initial results
+        with open(report_path, 'w', encoding='utf-8') as f:
+            json.dump(results, f, indent=2, ensure_ascii=False)
+        
+        current_image_path = initial_image_path
+        v_stability_counter = 0
+        last_v = 0.0
+        candidate_formula = "N/A"
+
+        try:
+            for i in range(self.max_iterations):
+                logger.info(f"--- Iteration {i + 1}/{self.max_iterations} ---")
+                
+                # Step A: Capture & Atomization (simulated for now)
+                mmss_atoms = self._capture_and_atomize(current_image_path)
+
+                # Step B: Hypothesis Generation (Mistral API call)
+                mistral_response = self._generate_hypothesis(mmss_atoms)
+                candidate_formula = mistral_response.get("formula")
+                refinement_command = mistral_response.get("command")
+
+                # Step C: Safety & Validation
+                command_validated = False
+                if self.safety_mode_active:
+                    logger.info(f"Command '{refinement_command}' simulated and skipped.")
+                else:
+                    command_validated = self._validate_command(refinement_command, mmss_atoms)
+
+                # Step D: Execution & Iteration
+                if not self.safety_mode_active and command_validated:
+                    if refinement_command.startswith('MOVE_Z'):
+                        value = float(refinement_command.split('(')[1].split(')')[0])
+                        current_image_path = self.microscope.execute_command(refinement_command, value=value)
+                        
+                        # Check max Z movement
+                        if abs(self.microscope.position['z']) > self.MAX_Z_MOVEMENT:
+                            logger.warning(f"Max Z movement reached ({self.microscope.position['z']} um), stopping")
+                            break
+
+                # Step E: Termination Check
+                current_v = self._calculate_semantic_value(mmss_atoms)
+                
+                # If confident detection found, stop early
+                if mmss_atoms.get("detected_type") and v_stability_counter >= 1:
+                    logger.info(f"Confident detection ({mmss_atoms['detected_type']}), stopping refinement")
+                    break
+                
+                if current_v >= 0.999:
+                    logger.info(f"Termination criteria met: V ({current_v}) >= 0.999")
+                    break
+
+                if abs(current_v - last_v) < 0.001:
+                    v_stability_counter += 1
+                    if v_stability_counter >= 3:
+                        logger.info("Termination criteria met: V stability over 3 iterations.")
+                        break
+                else:
+                    v_stability_counter = 0
+
+                last_v = current_v
+
+                # Store iteration results
+                iteration_data = {
+                    "iteration": i + 1,
+                    "mmss_atoms": mmss_atoms,
+                    "mistral_response": mistral_response,
+                    "command_validated": command_validated,
+                    "command_executed": None,
+                    "formula": candidate_formula,
+                    "v_stability_counter": v_stability_counter,
+                    "timestamp": datetime.datetime.now().isoformat()
+                }
+                results["iterations"].append(iteration_data)
+                results["last_update"] = datetime.datetime.now().isoformat()
+                
+                # Save intermediate results after each iteration
+                with open(report_path, 'w', encoding='utf-8') as f:
+                    json.dump(results, f, indent=2, ensure_ascii=False, default=str)
+                
+                # Check termination conditions
+                if current_v >= 0.999 or v_stability_counter >= 3:
+                    logger.info(f"Termination condition met: V={current_v}, stability={v_stability_counter}")
+                    break
+
+            # After loop completes, select best iteration based on detection confidence
+            best_iteration = None
+            best_confidence = 0
+            
+            for iter_data in results["iterations"]:
+                if iter_data["mmss_atoms"].get("detected_type"):
+                    # If there's a detection, this is high confidence
+                    confidence = 0.9
+                else:
+                    confidence = 0.5
+                
+                if confidence > best_confidence:
+                    best_confidence = confidence
+                    best_iteration = iter_data
+            
+            if best_iteration:
+                results["final_formula"] = best_iteration["formula"]
+                results["final_metrics"] = {
+                    "V": best_iteration["mmss_atoms"].get("V", 0),
+                    "S": best_iteration["mmss_atoms"].get("S", 0),
+                    "D_f": best_iteration["mmss_atoms"].get("D_f", 0),
+                    "R_T": best_iteration["mmss_atoms"].get("R_T", 0),
+                    "detected_type": best_iteration["mmss_atoms"].get("detected_type"),
+                    "branching_angle": best_iteration["mmss_atoms"].get("branching_angle"),
+                    "mean_curvature": best_iteration["mmss_atoms"].get("mean_curvature")
+                }
+            else:
+                # Fallback to last iteration
+                final_metrics = {
+                    "V": last_v,
+                    "S": mmss_atoms.get("S", 0),
+                    "D_f": mmss_atoms.get("D_f", 0),
+                    "R_T": mmss_atoms.get("R_T", 0)
+                }
+                results["final_formula"] = candidate_formula
+                results["final_metrics"] = final_metrics
+            
+            results["completion_time"] = datetime.datetime.now().isoformat()
+            results["status"] = "completed"
+            
+            # Save final results
+            with open(report_path, 'w', encoding='utf-8') as f:
+                json.dump(results, f, indent=2, ensure_ascii=False, default=str)
+                
+            logger.info("MMSS-Alpha-Formula run finished.")
+            
+            # Return the results
+            return results
+            
+        except Exception as e:
+            error_msg = f"Error during MMSS execution: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            
+            # Save error state to results
+            results["status"] = "error"
+            results["error"] = error_msg
+            results["error_time"] = datetime.datetime.now().isoformat()
+            
+            try:
+                with open(report_path, 'w', encoding='utf-8') as f:
+                    json.dump(results, f, indent=2, ensure_ascii=False, default=str)
+            except Exception as save_error:
+                logger.error(f"Failed to save error state: {save_error}")
+            
+            raise
+
+    def _capture_and_atomize(self, image_path: str) -> Dict[str, Any]:
+        """
+        Performs the MMSS atomization process with actual image analysis.
+        Fixed for thin-line fractals.
+        """
+        import sys
+        from pathlib import Path
+        sys.path.append(str(Path(__file__).parent.parent))
+        from invariant_measurer import measure_invariants
+        import cv2
+        import numpy as np
+        from skimage.feature import graycomatrix, graycoprops
+        from skimage.measure import shannon_entropy
+        from skimage.morphology import skeletonize
+        
+        try:
+            # Load image
+            image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+            if image is None:
+                logger.error(f"Failed to load image: {image_path}")
+                # Return last successful atoms if available
+                if self._last_successful_atoms is not None:
+                    logger.warning("Using last successful atoms")
+                    return self._last_successful_atoms
+                return self._get_default_atoms()
+            
+            image = cv2.resize(image, (256, 256))
+            
+            # === AUTO-ROI DETECTION ===
+            _, binary_detect = cv2.threshold(image, 128, 255, cv2.THRESH_BINARY_INV)
+            contours, _ = cv2.findContours(binary_detect, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            if not contours:
+                logger.warning("No contours found! Using full image.")
+                roi_image = image
+            else:
+                largest_contour = max(contours, key=cv2.contourArea)
+                x, y, w, h = cv2.boundingRect(largest_contour)
+                pad_x, pad_y = int(w * 0.1), int(h * 0.1)
+                x1, y1 = max(0, x - pad_x), max(0, y - pad_y)
+                x2, y2 = min(image.shape[1], x + w + pad_x), min(image.shape[0], y + h + pad_y)
+                roi_image = image[y1:y2, x1:x2]
+                logger.info(f"Auto-ROI: x={x1}, y={y1}, w={x2-x1}, h={y2-y1}")
+                if roi_image.size == 0:
+                    roi_image = image
+            
+            # === СКЕЛЕТИЗАЦИЯ для D_f ===
+            binary_for_skeleton = roi_image < 128  # Чёрные линии → True
+            skeleton = skeletonize(binary_for_skeleton).astype(np.uint8) * 255
+            sk_density = np.mean(skeleton > 0)
+            logger.info(f"Skeleton: density={sk_density:.3f}, nonzero={np.count_nonzero(skeleton)}")
+            if sk_density < 0.05:
+                logger.warning("Low skeleton density — fractal may be too thin or binarization issue")
+            
+            # === ИЗМЕРЕНИЕ ИНВАРИАНТОВ на скелете ===
+            invariants = measure_invariants(skeleton)
+            
+            # === ФРАКТАЛЬНАЯ КЛАССИФИКАЦИЯ через FractalClassifier ===
+            match = self.fractal_classifier.classify_from_invariants(skeleton, invariants)
+            
+            fractal_category = None  # Сохранить категорию для structural_relations
+            
+            if match and match.confidence > 0.7:
+                detected_type = match.fractal_type
+                fractal_category = match.category
+                symmetry = f"{match.category}_{match.fractal_type.replace(' ', '_')}"
+                microscopy_advice = match.microscopy_advice
+                logger.info(f"✓ Fractal classified: {detected_type} (conf: {match.confidence:.2f})")
+            else:
+                # Fallback на старую логику из measure_invariants
+                detected_type = invariants.get('detected_type')
+                symmetry = invariants.get('symmetry_approx', 'C1')
+                microscopy_advice = invariants.get('microscopy_advice', {})
+                if detected_type:
+                    logger.info(f"Fractal detected from invariants: {detected_type}")
+                else:
+                    logger.info(f"Fractal not classified. Using fallback symmetry: {symmetry}")
+            
+            # Basic statistics на оригинальном ROI
+            mean_intensity = np.mean(roi_image) / 255.0
+            std_intensity = np.std(roi_image) / 255.0
+            
+            # Edge detection
+            edges = cv2.Canny(roi_image, 100, 200)
+            edge_density = np.mean(edges > 0)
+            
+            # Texture analysis
+            roi_uint8 = np.clip(roi_image // 4, 0, 63).astype('uint8')  # 64 levels for GLCM stability
+            try:
+                glcm = graycomatrix(roi_uint8, distances=[1], angles=[0], levels=64, symmetric=True, normed=True)
+                contrast = graycoprops(glcm, 'contrast')[0, 0]
+                homogeneity = graycoprops(glcm, 'homogeneity')[0, 0]
+                energy = graycoprops(glcm, 'energy')[0, 0]
+            except:
+                contrast, homogeneity, energy = 0.5, 0.5, 0.5
+            
+            entropy = shannon_entropy(roi_image)
+            
+            # === ВЫЧИСЛЕНИЕ МЕТРИК ===
+            V = 0.3 * mean_intensity + 0.4 * (1 - homogeneity) + 0.3 * edge_density
+            S = 0.5 * edge_density + 0.5 * (1 - energy)
+            D_f = invariants['dimensionality']
+            R_T = self._calculate_topology_ratio(invariants)
+            
+            # === УМНАЯ ВАЛИДАЦИЯ РОИ ===
+            # Не предупреждать для тонких фракталов
+            if mean_intensity > 0.95 and edge_density < 0.01 and std_intensity < 0.05:
+                logger.warning("ROI appears to be empty background!")
+            
+            # Формирование language_atoms и structural_relations
+            language_atoms = [
+                f"intensity_{mean_intensity:.2f}", 
+                f"contrast_{contrast:.2f}",
+                f"entropy_{entropy:.2f}",
+                f"dimensionality_{D_f:.2f}"
+            ]
+            
+            structural_relations = [
+                f"edge_density_{edge_density:.3f}",
+                f"homogeneity_{homogeneity:.3f}",
+                f"symmetry_{invariants['symmetry_approx']}"
+            ]
+            
+            # Добавить атомы для спиралей
+            if invariants.get('spiral_detected', False):
+                spiral_type = invariants.get('spiral_type', 'UNKNOWN')
+                spiral_tightness = invariants.get('spiral_tightness', 0.0)
+                language_atoms.append(f"spiral_{spiral_type.lower()}")
+                structural_relations.append(f"spiral_tightness_{spiral_tightness:.2f}")
+            
+            # Добавить результаты фрактальной классификации
+            if detected_type:
+                language_atoms.append(f"fractal_{detected_type.lower().replace(' ', '_')}")
+                # Использовать категорию из классификатора, или определить из detected_type
+                if fractal_category:
+                    category = fractal_category
+                elif "Tree" in detected_type:
+                    category = "TREE"
+                elif "Dragon" in detected_type or "Koch" in detected_type:
+                    category = "CURVE"
+                elif "Spiral" in detected_type or "Mandelbrot" in detected_type or "Julia" in detected_type:
+                    category = "SET"
+                elif "Crystal" in detected_type:
+                    category = "CRYSTALLINE"
+                else:
+                    category = "UNKNOWN"
+                structural_relations.append(f"fractal_category_{category}")
+            
+            atoms = {
+                "V": float(np.clip(V, 0, 1)),
+                "S": float(np.clip(S, 0, 1)),
+                "D_f": float(np.clip(D_f, 1.0, 2.0)),
+                "R_T": float(R_T),
+                "intensity": float(mean_intensity),
+                "contrast": float(contrast),
+                "homogeneity": float(homogeneity),
+                "edge_density": float(edge_density),
+                "entropy": float(entropy),
+                "language_atoms": language_atoms,
+                "structural_relations": structural_relations,
+                "detected_type": detected_type,
+                "microscopy_advice": microscopy_advice,
+                "branching_angle": float(invariants.get('branching_angle', 0)),
+                "mean_curvature": float(invariants.get('mean_curvature', 0))
+            }
+            
+            # Save successful atoms for fallback
+            self._last_successful_atoms = atoms
+            return atoms
+            
+        except Exception as e:
+            logger.error(f"Error in image analysis: {e}", exc_info=True)
+            return self._get_default_atoms()
+            
+    def _get_default_atoms(self) -> Dict[str, Any]:
+        """Return default atom values when image processing fails"""
+        return {
+            "V": 0.8,
+            "S": 0.1,
+            "D_f": 1.8,
+            "R_T": 2.0,
+            "language_atoms": ["default_atom1", "default_atom2"],
+            "structural_relations": ["default_rel1"]
+        }
+
+    def _calculate_topology_ratio(self, invariants: Dict) -> float:
+        """Calculate topological ratio from invariants."""
+        symmetry = invariants.get('symmetry_approx', 'C1')
+        
+        # === НОВОЕ: Обработка спиральной симметрии ===
+        if symmetry.startswith('SPIRAL'):
+            # Для спиралей R_T зависит от tightness
+            spiral_tightness = invariants.get('spiral_tightness', 0.5)
+            spiral_type = invariants.get('spiral_type', 'LOGARITHMIC')
+            
+            if spiral_type == 'MULTIPLE':
+                # Множественные спирали (Julia set) — R_T ~ 2.5-3.5
+                return 2.5 + spiral_tightness  # 2.5-3.5
+            elif spiral_type == 'LOGARITHMIC':
+                # Логарифмическая спираль — золотое сечение
+                return 1.618 + spiral_tightness  # 1.6-2.6
+            else:
+                # Архимедова — ближе к 2
+                return 2.0 + spiral_tightness * 0.5
+        # ============================================
+        
+        # Существующий код для дискретной симметрии
+        if symmetry == 'C6':
+            return 3.0  # Koch: деление на 3
+        elif symmetry == 'C3':
+            return 3.0
+        elif symmetry == 'C12':
+            return 3.0
+        elif symmetry == 'C4':
+            return 4.0
+        elif symmetry == 'C8':
+            return 4.0
+        
+        # Fallback: branching angles
+        branching = invariants.get('branching', {})
+        angles = branching.get('angles', [])
+        if angles:
+            avg_angle = np.mean(angles)
+            if 55 <= avg_angle <= 65:
+                return 3.0
+            elif 85 <= avg_angle <= 95:
+                return 4.0
+        
+        return 2.0  # Default
+
+    def _fix_latex_escapes(self, json_str: str) -> str:
+        """Fix common LaTeX escape issues in JSON response"""
+        import re
+        # Escape single backslashes before letters (but not before " or /)
+        json_str = re.sub(r'(?<!\\)\\(frac|mathcal|cdot|sqrt|sum|prod|int)(?![\\"])', r'\\\\\1', json_str)
+        # Replace \_ with \\_ (escaped underscore)
+        json_str = json_str.replace('\\_', '\\\\_')
+        return json_str
+
+    def _generate_hypothesis(self, mmss_atoms: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generates a hypothesis using the Mistral API with a Jinja2 template.
+        """
+        if not self.mistral_client:
+            logger.warning("Mistral client not available. Using simulated response.")
+            return self._get_simulated_hypothesis()
+
+        try:
+            template = self.jinja_env.get_template('mistral_prompt.jinja2')
+            prompt = template.render(mmss_atoms=mmss_atoms)
+
+            # Updated to use the correct API for mistralai v0.4.2
+            chat_response = self.mistral_client.chat(
+                model="mistral-large-latest",
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            response_text = chat_response.choices[0].message.content
+            logger.debug(f"Raw response: {response_text}")
+
+            # Extract JSON from markdown code block if present
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+                logger.debug(f"Extracted JSON: {response_text}")
+
+            # Fix LaTeX escapes
+            response_text = self._fix_latex_escapes(response_text)
+
+            try:
+                return json.loads(response_text)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response: {e}")
+                logger.error(f"Response content: {response_text}")
+                raise
+
+        except Exception as e:
+            logger.error(f"Mistral API call failed: {e}. Using simulated response.")
+            return self._get_simulated_hypothesis()
+
+    def _get_simulated_hypothesis(self) -> Dict[str, Any]:
+        """
+        Returns a simulated hypothesis for fallback.
+        """
+        iteration = self.max_iterations - (self.max_iterations - 1)
+        command = f"MOVE_Z({100 * iteration})"
+        return {
+            "formula": f"SIMULATED_FORMULA_ITER_{iteration}",
+            "command": command
+        }
+
+    def _validate_command(self, command: str, current_metrics: Dict[str, Any]) -> bool:
+        logger.info(f"Validating command: {command}")
+        r_t = current_metrics.get("R_T")
+        d_f = current_metrics.get("D_f")
+
+        # Расширенные диапазоны для фракталов
+        if not (2.0 <= r_t <= 4.0):
+            logger.warning(f"Command validation failed: R_T ({r_t}) is out of bounds [2.0, 4.0].")
+            return False
+        if not (1.0 <= d_f <= 2.2):
+            logger.warning(f"Command validation failed: D_f ({d_f}) is out of bounds [1.0, 2.2].")
+            return False
+
+        try:
+            self.microscope._validate_command(command)
+        except ValueError as e:
+            logger.warning(f"Command validation failed: {e}")
+            return False
+        logger.info("Command validation successful.")
+        return True
+
+    def _calculate_semantic_value(self, mmss_atoms: Dict[str, Any]) -> float:
+        """
+        Calculates the semantic value (V) from the MMSS atoms.
+        """
+        return mmss_atoms.get("V", 0.0)
+
+    def _generate_final_output(self, formula: str, final_metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generates the final output in the specified JSON format.
+        """
+        with open("MMSS-Blockly.json", "r") as f:
+            blockly_data = json.load(f)
+
+        return {
+            "final_meta_formula": formula,
+            "object_description": "A description of the derived formula and structure.",
+            "light_spectrums_used": ["Warm-White_450nm"],
+            "final_mmss_module": {
+                "system_name": blockly_data["system_name"],
+                "version": blockly_data["version"],
+                "description": blockly_data["description"],
+                "workflow_blocks": blockly_data["workflow_blocks"],
+                "control_flow": blockly_data["control_flow"],
+                "current_metrics": final_metrics
+            }
+        }

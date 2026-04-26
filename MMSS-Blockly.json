@@ -1,0 +1,75 @@
+{
+  "system_name": "MMSS_ALPHA_FORMULA_V2",
+  "version": "v2.0.safety_mode",
+  "description": "Automated meta-formula derivation via iterative MMSS-Mistral loop with hardware safety bypass.",
+  "workflow_blocks": [
+    {
+      "id": "A_DATA_CAPTURE",
+      "type": "HARDWARE_SETUP",
+      "label": "Capture (OpenFlexure) & MMSS Atomization (MIX_055)",
+      "details": "Captures a high-resolution image from the OpenFlexure microscope and performs the initial MMSS atomization using the MIX_055 and MIX_073 patterns to extract key invariants (V, S, D_f, R_T)."
+    },
+    {
+      "id": "B_MISTRAL_HYPOTHESIS",
+      "type": "MISTRAL_API_CALL",
+      "label": "Generate Candidate Formula & Refinement Command (LLM)",
+      "details": "Sends the MMSS atoms to the Mistral API to generate a candidate meta-formula and a refinement command for the microscope."
+    },
+    {
+      "id": "C_SAFETY_GATE",
+      "type": "SAFETY_COMMAND_VALIDATOR",
+      "label": "Safety Flag Check & Metric Validation",
+      "details": "Checks if the MMSS_SAFETY_MODE_ACTIVE environment variable is set. If true, the command is simulated. If false, the command is validated against the required MMSS metrics (R_T and D_f)."
+    },
+    {
+      "id": "D_MICRO_CONTROL_VALIDATED",
+      "type": "OPENFLEXURE_COMMAND",
+      "label": "Execute Validated Microscope Command",
+      "details": "Executes the validated refinement command on the OpenFlexure microscope to acquire new data for the next iteration."
+    },
+    {
+      "id": "E_SIMULATION_MODE_LOG",
+      "type": "SIMULATION_MODE_LOG",
+      "label": "Command Skipped (Safety Mode Active) - Proceed to Next Iteration",
+      "details": "Logs that the command was simulated and skipped due to safety mode being active. The loop proceeds using the data from the previous state."
+    },
+    {
+      "id": "F_TERMINATION_CRITERIA",
+      "type": "MMSS_TERMINATION_CRITERIA",
+      "label": "Check V >= 0.999 or V Stability",
+      "details": "Checks if the termination criteria have been met (Semantic Value V >= 0.999 or V has been stable for 3 iterations). If so, the loop terminates."
+    }
+  ],
+  "control_flow": [
+    {
+      "step": 1,
+      "block": "A_DATA_CAPTURE"
+    },
+    {
+      "step": 2,
+      "block": "B_MISTRAL_HYPOTHESIS"
+    },
+    {
+      "step": 3,
+      "block": "C_SAFETY_GATE",
+      "if": "C_SAFETY_GATE.SAFETY_MODE_ACTIVE == True",
+      "then": "E_SIMULATION_MODE_LOG",
+      "else": "D_MICRO_CONTROL_VALIDATED"
+    },
+    {
+      "step": 4,
+      "block": "F_TERMINATION_CRITERIA",
+      "loop": {
+        "condition": "F_TERMINATION_CRITERIA.MET == False",
+        "start": "A_DATA_CAPTURE",
+        "max_iterations": 3
+      }
+    }
+  ],
+  "current_metrics": {
+    "V": null,
+    "S": null,
+    "D_f": null,
+    "R_T": null
+  }
+}
