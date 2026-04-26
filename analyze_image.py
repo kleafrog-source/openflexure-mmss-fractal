@@ -8,9 +8,8 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 from src.mmss.mmss_engine import MMSS_Engine
+from src.mmss.env_utils import load_project_env
 from src.mmss.report_publisher import (
     build_viewer_targets,
     ensure_report_server,
@@ -18,8 +17,7 @@ from src.mmss.report_publisher import (
     publish_analysis_session,
 )
 
-
-load_dotenv(".env.local")
+load_project_env()
 
 
 def run_fractal_analysis(image_path: str, analysis_mode: str = "invariants"):

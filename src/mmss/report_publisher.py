@@ -93,8 +93,10 @@ def _build_advice_list(advice: Dict[str, Any]) -> str:
     return "\n".join(items)
 
 
-def _build_vision_list(vision: Dict[str, Any]) -> str:
+def _build_vision_list(vision: Dict[str, Any], vision_status: str | None = None, vision_error: str | None = None) -> str:
     if not vision:
+        if vision_error:
+            return f"<li><strong>status:</strong> {html.escape(str(vision_status or 'unavailable'))}</li><li><strong>error:</strong> {html.escape(str(vision_error))}</li>"
         return '<li>No raw Mistral vision summary for this session.</li>'
 
     preferred_order = [
@@ -170,6 +172,8 @@ def _render_session_html(session_meta: Dict[str, Any], results: Dict[str, Any]) 
     timestamp = session_meta.get("timestamp", "n/a")
     status = session_meta.get("status", "unknown")
     vision_analysis = session_meta.get("vision_analysis", {})
+    vision_status = session_meta.get("vision_status")
+    vision_error = session_meta.get("vision_error")
     raw_json = html.escape(json.dumps(results, indent=2, ensure_ascii=False))
     
     # Check which analysis modes are available
@@ -468,10 +472,10 @@ def _render_session_html(session_meta: Dict[str, Any], results: Dict[str, Any]) 
             </ul>
           </div>
 
-          <div class="panel">
-            <div class="eyebrow">Mistral Raw Vision</div>
+            <div class="panel">
+              <div class="eyebrow">Mistral Raw Vision</div>
             <ul class="advice-list">
-              {_build_vision_list(vision_analysis)}
+              {_build_vision_list(vision_analysis, vision_status, vision_error)}
             </ul>
           </div>
 
@@ -1120,6 +1124,8 @@ def publish_analysis_session(image_path: str | Path, results: Dict[str, Any]) ->
         "final_formula": results.get("final_formula"),
         "final_metrics": results.get("final_metrics", {}),
         "vision_analysis": results.get("vision_analysis") or {},
+        "vision_status": results.get("vision_status"),
+        "vision_error": results.get("vision_error") or results.get("last_analysis_error"),
         "microscopy_advice": _extract_microscopy_advice(results),
         "iterations_count": len(results.get("iterations", [])),
         "has_invariants": has_invariants,

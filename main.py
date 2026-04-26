@@ -10,6 +10,7 @@ from pathlib import Path
 # Add the src directory to the Python path
 sys.path.append(str(Path(__file__).parent / 'src'))
 
+from mmss.env_utils import load_project_env
 from mmss.mmss_engine import MMSS_Engine
 from mmss.report_publisher import (
     build_viewer_targets,
@@ -17,6 +18,8 @@ from mmss.report_publisher import (
     open_in_browser,
     publish_analysis_session,
 )
+
+load_project_env()
 
 def main():
     """

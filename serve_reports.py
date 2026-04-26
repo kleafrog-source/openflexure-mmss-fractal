@@ -11,8 +11,7 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from dotenv import load_dotenv
-
+from src.mmss.env_utils import load_project_env
 from src.mmss.report_publisher import (
     OUTPUT_ROOT,
     PROJECT_ROOT,
@@ -23,7 +22,7 @@ from src.mmss.report_publisher import (
     publish_analysis_session,
 )
 
-load_dotenv(".env.local")
+load_project_env()
 
 
 class APIHandler(SimpleHTTPRequestHandler):
@@ -41,6 +40,25 @@ class APIHandler(SimpleHTTPRequestHandler):
     @staticmethod
     def _merge_analysis_result(existing_report: dict, analysis_result: dict, mode: str) -> dict:
         merged = dict(existing_report or {})
+        core_fields = {
+            "iterations",
+            "final_formula",
+            "final_metrics",
+            "vision_analysis",
+            "vision_status",
+            "vision_error",
+            "analysis_mode",
+            "timestamp",
+            "image_path",
+            "report_path",
+            "status",
+            "last_update",
+            "completion_time",
+            "error",
+            "error_time",
+        }
+        requires_real_vision = mode in {"hybrid", "vision_only"}
+        has_useful_vision = bool(analysis_result.get("vision_analysis"))
 
         preserved_mode_blocks = {
             "invariants_analysis": existing_report.get("invariants_analysis"),
@@ -50,6 +68,8 @@ class APIHandler(SimpleHTTPRequestHandler):
 
         for key, value in analysis_result.items():
             if key == "session":
+                continue
+            if requires_real_vision and not has_useful_vision and key in core_fields:
                 continue
             merged[key] = value
 
@@ -61,6 +81,11 @@ class APIHandler(SimpleHTTPRequestHandler):
             merged["hybrid_analysis"] = analysis_result
         elif mode == "vision_only":
             merged["vision_only_analysis"] = analysis_result
+
+        if requires_real_vision and not has_useful_vision:
+            merged["last_analysis_error"] = analysis_result.get("vision_error") or "Mistral raw vision did not return data for this run."
+        else:
+            merged.pop("last_analysis_error", None)
 
         merged["analysis_mode_last_run"] = mode
         return merged
