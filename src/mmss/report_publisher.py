@@ -1101,7 +1101,12 @@ def publish_analysis_session(image_path: str | Path, results: Dict[str, Any]) ->
         shutil.copy2(source_image, session_image)
 
     session_report = session_dir / "report.json"
-    shutil.copy2(source_report, session_report)
+    if source_report != session_report:
+        shutil.copy2(source_report, session_report)
+
+    has_invariants = results.get("invariants_analysis") is not None
+    has_hybrid = results.get("hybrid_analysis") is not None
+    has_vision_only = results.get("vision_only_analysis") is not None
 
     session_meta = {
         "session_id": session_id,
@@ -1117,6 +1122,9 @@ def publish_analysis_session(image_path: str | Path, results: Dict[str, Any]) ->
         "vision_analysis": results.get("vision_analysis") or {},
         "microscopy_advice": _extract_microscopy_advice(results),
         "iterations_count": len(results.get("iterations", [])),
+        "has_invariants": has_invariants,
+        "has_hybrid": has_hybrid,
+        "has_vision_only": has_vision_only,
     }
 
     session_payload = dict(results)

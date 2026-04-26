@@ -7,20 +7,63 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src.mmss.report_publisher import OUTPUT_ROOT, SESSIONS_ROOT, build_gallery, get_local_ip, open_in_browser
+from src.mmss.report_publisher import (
+    OUTPUT_ROOT,
+    PROJECT_ROOT,
+    SESSIONS_ROOT,
+    build_gallery,
+    get_local_ip,
+    open_in_browser,
+    publish_analysis_session,
+)
 
 load_dotenv(".env.local")
 
 
 class APIHandler(SimpleHTTPRequestHandler):
     """Custom handler that serves static files and API endpoints."""
+
+    @staticmethod
+    def _resolve_project_path(value: str | None) -> Path | None:
+        if not value:
+            return None
+        path = Path(value)
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+        return path.resolve()
+
+    @staticmethod
+    def _merge_analysis_result(existing_report: dict, analysis_result: dict, mode: str) -> dict:
+        merged = dict(existing_report or {})
+
+        preserved_mode_blocks = {
+            "invariants_analysis": existing_report.get("invariants_analysis"),
+            "hybrid_analysis": existing_report.get("hybrid_analysis"),
+            "vision_only_analysis": existing_report.get("vision_only_analysis"),
+        }
+
+        for key, value in analysis_result.items():
+            if key == "session":
+                continue
+            merged[key] = value
+
+        merged.update(preserved_mode_blocks)
+
+        if mode == "invariants":
+            merged["invariants_analysis"] = analysis_result
+        elif mode == "hybrid":
+            merged["hybrid_analysis"] = analysis_result
+        elif mode == "vision_only":
+            merged["vision_only_analysis"] = analysis_result
+
+        merged["analysis_mode_last_run"] = mode
+        return merged
     
     def do_POST(self):
         """Handle POST requests for API endpoints."""
@@ -54,10 +97,10 @@ class APIHandler(SimpleHTTPRequestHandler):
                 return
             
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            image_path = manifest.get("image_path")
-            report_path = manifest.get("report_path")
+            image_path = self._resolve_project_path(manifest.get("image_path"))
+            report_path = self._resolve_project_path(manifest.get("report_path"))
             
-            if not image_path or not Path(image_path).exists():
+            if not image_path or not image_path.exists():
                 self.send_error(404, "Image not found")
                 return
             
@@ -69,47 +112,28 @@ class APIHandler(SimpleHTTPRequestHandler):
             os.environ["MMSS_ANALYSIS_MODE"] = mode
             
             engine = MMSS_Engine(config={})
-            
-            if mode == "vision_only":
-                # Single vision call
-                vision_result = engine._analyze_raw_image_with_mistral(image_path)
-                if not vision_result:
-                    time.sleep(5)
-                    vision_result = engine._analyze_raw_image_with_mistral(image_path)
-                analysis_result = {"vision_analysis": vision_result}
-            else:
-                # Full analysis for invariants/hybrid
-                analysis_result = engine.run(image_path)
-            
-            # Update report with mode-specific block
-            if report_path and Path(report_path).exists():
+
+            analysis_result = engine.run(str(image_path))
+
+            existing_report = {}
+            if report_path and report_path.exists():
                 with open(report_path, "r", encoding="utf-8") as f:
-                    report = json.load(f)
-                
-                # Store result in mode-specific block
-                if mode == "invariants":
-                    report["invariants_analysis"] = analysis_result
-                    manifest["has_invariants"] = True
-                elif mode == "hybrid":
-                    report["hybrid_analysis"] = analysis_result
-                    manifest["has_hybrid"] = True
-                elif mode == "vision_only":
-                    report["vision_only_analysis"] = analysis_result
-                    manifest["has_vision_only"] = True
-                
-                with open(report_path, "w", encoding="utf-8") as f:
-                    json.dump(report, f, indent=2, ensure_ascii=False, default=str)
-                
-                # Update manifest
-                manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
-            
-            # Rebuild gallery to update status
+                    existing_report = json.load(f)
+
+            merged_report = self._merge_analysis_result(existing_report, analysis_result, mode)
+            published = publish_analysis_session(str(image_path), merged_report)
             build_gallery()
             
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            response = {"success": True, "mode": mode, "result": analysis_result}
+            response = {
+                "success": True,
+                "mode": mode,
+                "result": analysis_result,
+                "session_id": published["session_id"],
+                "viewer_path": published["viewer_path"],
+            }
             self.wfile.write(json.dumps(response).encode("utf-8"))
             
         except Exception as e:
