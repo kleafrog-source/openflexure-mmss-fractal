@@ -132,82 +132,129 @@ class MMSS_Engine:
         candidate_formula = "N/A"
 
         try:
-            for i in range(self.max_iterations):
-                logger.info(f"--- Iteration {i + 1}/{self.max_iterations} ---")
-                
-                # Step A: Capture & Atomization (simulated for now)
-                mmss_atoms = self._capture_and_atomize(current_image_path)
+            # In vision_only mode, do single iteration with vision analysis only
+            if self.analysis_mode == "vision_only":
+                logger.info("vision_only mode: Single iteration with Mistral vision only")
+                mmss_atoms = self._capture_and_atomize_vision_only(current_image_path)
                 if mmss_atoms.get("vision_analysis"):
                     results["vision_analysis"] = mmss_atoms.get("vision_analysis")
-
-                # Step B: Hypothesis Generation (Mistral API call)
+                
+                # Generate hypothesis based on vision result
                 mistral_response = self._generate_hypothesis(mmss_atoms)
                 candidate_formula = mistral_response.get("formula")
-                refinement_command = mistral_response.get("command")
-
-                # Step C: Safety & Validation
-                command_validated = False
-                if self.safety_mode_active:
-                    logger.info(f"Command '{refinement_command}' simulated and skipped.")
-                else:
-                    command_validated = self._validate_command(refinement_command, mmss_atoms)
-
-                # Step D: Execution & Iteration
-                if not self.safety_mode_active and command_validated:
-                    if refinement_command.startswith('MOVE_Z'):
-                        value = float(refinement_command.split('(')[1].split(')')[0])
-                        current_image_path = self.microscope.execute_command(refinement_command, value=value)
-                        
-                        # Check max Z movement
-                        if abs(self.microscope.position['z']) > self.MAX_Z_MOVEMENT:
-                            logger.warning(f"Max Z movement reached ({self.microscope.position['z']} um), stopping")
-                            break
-
-                # Step E: Termination Check
-                current_v = self._calculate_semantic_value(mmss_atoms)
                 
-                # If confident detection found, stop early
-                if mmss_atoms.get("detected_type") and v_stability_counter >= 1:
-                    logger.info(f"Confident detection ({mmss_atoms['detected_type']}), stopping refinement")
-                    break
-                
-                if current_v >= 0.999:
-                    logger.info(f"Termination criteria met: V ({current_v}) >= 0.999")
-                    break
-
-                if abs(current_v - last_v) < 0.001:
-                    v_stability_counter += 1
-                    if v_stability_counter >= 3:
-                        logger.info("Termination criteria met: V stability over 3 iterations.")
-                        break
-                else:
-                    v_stability_counter = 0
-
-                last_v = current_v
-
-                # Store iteration results
+                # Store single iteration result
                 iteration_data = {
-                    "iteration": i + 1,
+                    "iteration": 1,
                     "mmss_atoms": mmss_atoms,
                     "mistral_response": mistral_response,
-                    "command_validated": command_validated,
+                    "command_validated": False,
                     "command_executed": None,
                     "formula": candidate_formula,
-                    "v_stability_counter": v_stability_counter,
+                    "v_stability_counter": 1,
                     "vision_analysis": mmss_atoms.get("vision_analysis"),
                     "timestamp": datetime.datetime.now().isoformat()
                 }
                 results["iterations"].append(iteration_data)
                 results["last_update"] = datetime.datetime.now().isoformat()
                 
-                # Save intermediate results after each iteration
+                # Set final metrics from vision-only analysis
+                results["final_formula"] = candidate_formula
+                results["final_metrics"] = {
+                    "V": mmss_atoms.get("V", 0),
+                    "S": mmss_atoms.get("S", 0),
+                    "D_f": mmss_atoms.get("D_f", 0),
+                    "R_T": mmss_atoms.get("R_T", 0),
+                    "detected_type": mmss_atoms.get("detected_type"),
+                    "detected_source": mmss_atoms.get("detected_source"),
+                }
+                
+                # Save final results for vision_only mode
+                results["completion_time"] = datetime.datetime.now().isoformat()
+                results["status"] = "completed"
                 with open(report_path, 'w', encoding='utf-8') as f:
                     json.dump(results, f, indent=2, ensure_ascii=False, default=str)
                 
-                # Check termination conditions
-                if current_v >= 0.999 or v_stability_counter >= 3:
-                    logger.info(f"Termination condition met: V={current_v}, stability={v_stability_counter}")
-                    break
+                logger.info("vision_only mode: Single analysis complete")
+                return results
+            else:
+                # Standard multi-iteration mode for invariants/hybrid
+                for i in range(self.max_iterations):
+                    logger.info(f"--- Iteration {i + 1}/{self.max_iterations} ---")
+                    
+                    # Step A: Capture & Atomization (simulated for now)
+                    mmss_atoms = self._capture_and_atomize(current_image_path)
+                    if mmss_atoms.get("vision_analysis"):
+                        results["vision_analysis"] = mmss_atoms.get("vision_analysis")
+
+                    # Step B: Hypothesis Generation (Mistral API call)
+                    mistral_response = self._generate_hypothesis(mmss_atoms)
+                    candidate_formula = mistral_response.get("formula")
+                    refinement_command = mistral_response.get("command")
+
+                    # Step C: Safety & Validation
+                    command_validated = False
+                    if self.safety_mode_active:
+                        logger.info(f"Command '{refinement_command}' simulated and skipped.")
+                    else:
+                        command_validated = self._validate_command(refinement_command, mmss_atoms)
+
+                    # Step D: Execution & Iteration
+                    if not self.safety_mode_active and command_validated:
+                        if refinement_command.startswith('MOVE_Z'):
+                            value = float(refinement_command.split('(')[1].split(')')[0])
+                            current_image_path = self.microscope.execute_command(refinement_command, value=value)
+                            
+                            # Check max Z movement
+                            if abs(self.microscope.position['z']) > self.MAX_Z_MOVEMENT:
+                                logger.warning(f"Max Z movement reached ({self.microscope.position['z']} um), stopping")
+                                break
+
+                    # Step E: Termination Check
+                    current_v = self._calculate_semantic_value(mmss_atoms)
+                    
+                    # If confident detection found, stop early
+                    if mmss_atoms.get("detected_type") and v_stability_counter >= 1:
+                        logger.info(f"Confident detection ({mmss_atoms['detected_type']}), stopping refinement")
+                        break
+                    
+                    if current_v >= 0.999:
+                        logger.info(f"Termination criteria met: V ({current_v}) >= 0.999")
+                        break
+
+                    if abs(current_v - last_v) < 0.001:
+                        v_stability_counter += 1
+                        if v_stability_counter >= 3:
+                            logger.info("Termination criteria met: V stability over 3 iterations.")
+                            break
+                    else:
+                        v_stability_counter = 0
+
+                    last_v = current_v
+
+                    # Store iteration results
+                    iteration_data = {
+                        "iteration": i + 1,
+                        "mmss_atoms": mmss_atoms,
+                        "mistral_response": mistral_response,
+                        "command_validated": command_validated,
+                        "command_executed": None,
+                        "formula": candidate_formula,
+                        "v_stability_counter": v_stability_counter,
+                        "vision_analysis": mmss_atoms.get("vision_analysis"),
+                        "timestamp": datetime.datetime.now().isoformat()
+                    }
+                    results["iterations"].append(iteration_data)
+                    results["last_update"] = datetime.datetime.now().isoformat()
+                    
+                    # Save intermediate results after each iteration
+                    with open(report_path, 'w', encoding='utf-8') as f:
+                        json.dump(results, f, indent=2, ensure_ascii=False, default=str)
+                    
+                    # Check termination conditions
+                    if current_v >= 0.999 or v_stability_counter >= 3:
+                        logger.info(f"Termination condition met: V={current_v}, stability={v_stability_counter}")
+                        break
 
             # After loop completes, select best iteration based on detection confidence
             best_iteration = None
@@ -277,6 +324,52 @@ class MMSS_Engine:
                 logger.error(f"Failed to save error state: {save_error}")
             
             raise
+
+    def _capture_and_atomize_vision_only(self, image_path: str) -> Dict[str, Any]:
+        """
+        Vision-only atomization: single Mistral vision call without geometric classification.
+        Used in vision_only mode for one-shot analysis.
+        """
+        logger.info("vision_only atomization: Single Mistral vision call only")
+        
+        # Perform vision analysis
+        vision_analysis = self._analyze_raw_image_with_mistral(image_path)
+        
+        # Extract classification from vision result
+        detected_type = None
+        fractal_category = "BIOLOGICAL"
+        detected_source = "none"
+        microscopy_advice = {}
+        
+        if vision_analysis:
+            vision_object_guess = vision_analysis.get("object_guess") or vision_analysis.get("focus_guess")
+            if not vision_object_guess or str(vision_object_guess).lower() == "unknown":
+                vision_object_guess = vision_analysis.get("category_guess")
+            
+            if vision_object_guess:
+                detected_type = vision_object_guess
+                fractal_category = vision_analysis.get("category_guess", fractal_category)
+                detected_source = "mistral_raw_vision"
+                microscopy_advice = {}
+                summary = vision_analysis.get("summary") or vision_analysis.get("biological_interpretation")
+                if summary:
+                    microscopy_advice["vision_note"] = summary
+                logger.info(f"vision_only classification: {detected_type}")
+        
+        # Return minimal atomization result
+        return {
+            "V": 0.5 if detected_type else 0.0,
+            "S": 0.5,
+            "D_f": 0.0,
+            "R_T": 0.0,
+            "detected_type": detected_type,
+            "detected_source": detected_source,
+            "fractal_category": fractal_category,
+            "microscopy_advice": microscopy_advice,
+            "vision_analysis": vision_analysis,
+            "branching_angle": None,
+            "mean_curvature": None,
+        }
 
     def _capture_and_atomize(self, image_path: str) -> Dict[str, Any]:
         """
