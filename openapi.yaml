@@ -1,0 +1,4399 @@
+components:
+  schemas:
+    Action:
+      properties:
+        action:
+          type: string
+        data: {}
+        href:
+          type: string
+        id:
+          type: string
+        input: {}
+        links:
+          type: object
+        log:
+          items:
+            $ref: '#/components/schemas/LogRecord'
+          type: array
+        output: {}
+        progress:
+          type: integer
+        status:
+          enum:
+          - pending
+          - running
+          - completed
+          - cancelled
+          - error
+          type: string
+        timeCompleted:
+          format: date-time
+          type: string
+        timeRequested:
+          format: date-time
+          type: string
+      type: object
+    AutoExposureFromRawViewInput:
+      properties:
+        max_iterations:
+          default: 20
+          description: The number of adjustments to the camera's settings to make
+            before giving up.
+          type: integer
+        percentile:
+          default: 99.9
+          description: A float between 0 and 100 setting the centile to use to measure
+            the white point of the image.  A value of 99.9 allows 0.1% of the pixels
+            to be erroneously bright - this helps stability in low light.
+          example: 99.9
+          type: number
+        target_white_level:
+          default: 700
+          description: The pixel value (10-bit format) that we aim for when adjusting
+            shutter/gain.
+          example: 700
+          type: integer
+        tolerance:
+          default: 0.05
+          description: We stop adjusting when we get within this fraction of the target
+            value.  It is a number between 0 and 1, usually 0.01--0.1.
+          example: 0.05
+          type: number
+      type: object
+    AutoWhiteBalanceFromRawViewInput:
+      properties:
+        percentile:
+          default: 99.9
+          description: A float between 0 and 100 setting the centile to use to measure
+            the white point of the image.  A value of 99.9 allows 0.1% of the pixels
+            to be erroneously bright - this helps stability in low light.
+          example: 99.9
+          type: number
+      type: object
+    BasicCaptureArgs:
+      properties:
+        bayer:
+          default: false
+          description: Include raw bayer data in capture
+          type: boolean
+        resize:
+          $ref: '#/components/schemas/CaptureResize'
+        use_video_port:
+          default: false
+          type: boolean
+      type: object
+    BasicDataset:
+      properties:
+        id:
+          format: uuid
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+      type: object
+    Calibrate1DViewInput:
+      properties:
+        direction:
+          example:
+          - 1
+          - 0
+          - 0
+          items:
+            type: number
+          type: array
+      required:
+      - direction
+      type: object
+    Capture:
+      properties:
+        annotations:
+          additionalProperties:
+            type: string
+          type: object
+        dataset:
+          $ref: '#/components/schemas/BasicDataset'
+        format:
+          type: string
+        id:
+          format: uuid
+          type: string
+        links:
+          type: object
+        name:
+          type: string
+        path:
+          description: Path of file on microscope device
+          type: string
+        tags:
+          items:
+            type: string
+          type: array
+        time:
+          format: date
+          type: string
+      type: object
+    CaptureResize:
+      properties:
+        height:
+          example: 480
+          type: integer
+        width:
+          example: 640
+          type: integer
+      required:
+      - height
+      - width
+      type: object
+    ClosedLoopMoveInImageCoordinatesViewInput:
+      properties:
+        x:
+          description: The number of pixels to move in X
+          example: 100
+          type: number
+        y:
+          description: The number of pixels to move in Y
+          example: 100
+          type: number
+      required:
+      - x
+      - y
+      type: object
+    Extension:
+      properties:
+        description:
+          type: string
+        links:
+          type: object
+        meta:
+          type: object
+        pythonName:
+          type: string
+        pythonObject:
+          type: string
+        title:
+          type: string
+      type: object
+    FullCaptureArgs:
+      properties:
+        annotations:
+          default: {}
+          example: &id001
+            Client: SwaggerUI
+          type: object
+        bayer:
+          default: false
+          description: Include raw bayer data in capture
+          type: boolean
+        filename:
+          example: MyFileName
+          type: string
+        resize:
+          $ref: '#/components/schemas/CaptureResize'
+        tags:
+          default: []
+          example: &id002
+          - docs
+          items:
+            type: string
+          type: array
+        temporary:
+          default: false
+          description: Delete capture on shutdown
+          type: boolean
+        use_video_port:
+          default: false
+          type: boolean
+      type: object
+    GPUPreviewStartAPIInput:
+      properties:
+        window:
+          default: []
+          example:
+          - 0
+          - 0
+          - 640
+          - 480
+          items:
+            type: integer
+          type: array
+      type: object
+    GetRawChannelPercentilesViewInput:
+      properties:
+        percentile:
+          description: A float between 0 and 100 setting the centile to calculate
+          example: 99.9
+          type: number
+      type: object
+    LogRecord:
+      properties:
+        created:
+          format: date-time
+          type: string
+        filename:
+          type: string
+        levelname:
+          type: string
+        levelno:
+          type: integer
+        lineno:
+          type: integer
+        message:
+          type: string
+        name:
+          type: string
+      type: object
+    MoveInImageCoordinatesViewInput:
+      properties:
+        x:
+          description: The number of pixels to move in X
+          example: 100
+          type: number
+        y:
+          description: The number of pixels to move in Y
+          example: 100
+          type: number
+      required:
+      - x
+      - y
+      type: object
+    MoveStageAPIInput:
+      properties:
+        absolute:
+          default: false
+          description: Move to an absolute position
+          example: false
+          type: boolean
+        x:
+          default: null
+          example: 100
+          nullable: true
+          type: integer
+        y:
+          default: null
+          example: 100
+          nullable: true
+          type: integer
+        z:
+          default: null
+          example: 20
+          nullable: true
+          type: integer
+      type: object
+    TestClosedLoopSpiralScanViewInput:
+      properties:
+        N:
+          description: The number of rings in the spiral scan
+          example: 100
+          type: integer
+        x_step:
+          description: The number of pixels to move in X
+          example: 100
+          type: number
+        y_step:
+          description: The number of pixels to move in Y
+          example: 100
+          type: number
+      required:
+      - N
+      - x_step
+      - y_step
+      type: object
+    TileScanArgs:
+      properties:
+        annotations:
+          default: {}
+          example: *id001
+          type: object
+        autofocus_dz:
+          default: 50
+          type: integer
+        bayer:
+          default: false
+          description: Include raw bayer data in capture
+          type: boolean
+        detect_empty_fields_and_skip_autofocus:
+          default: false
+          type: boolean
+        fast_autofocus:
+          default: false
+          type: boolean
+        filename:
+          example: MyFileName
+          type: string
+        grid:
+          default:
+          - 3
+          - 3
+          - 3
+          example:
+          - 3
+          - 3
+          - 3
+          items:
+            minimum: 1
+            type: integer
+          type: array
+        namemode:
+          default: coordinates
+          example: coordinates
+          type: string
+        resize:
+          $ref: '#/components/schemas/CaptureResize'
+        stride_size:
+          default:
+          - 2000
+          - 1500
+          - 100
+          example:
+          - 2000
+          - 1500
+          - 100
+          items:
+            type: integer
+          type: array
+        style:
+          default: raster
+          type: string
+        tags:
+          default: []
+          example: *id002
+          items:
+            type: string
+          type: array
+        temporary:
+          default: false
+          description: Delete capture on shutdown
+          type: boolean
+        use_video_port:
+          default: false
+          type: boolean
+      type: object
+    ZipObject:
+      properties:
+        data_size:
+          type: number
+        id:
+          type: string
+        links:
+          type: object
+        zip_size:
+          type: number
+      type: object
+    autofocusInput:
+      properties:
+        dz:
+          description: An ascending list of relative z positions
+          example:
+          - -300
+          - -200
+          - -100
+          - 0
+          - 100
+          - 200
+          - 300
+          items:
+            type: integer
+          type: array
+      type: object
+    fast_autofocusInput:
+      properties:
+        dz:
+          default: 2000
+          description: Total Z range to search over (in stage steps)
+          example: 2000
+          type: integer
+      type: object
+    fast_up_down_up_autofocusInput:
+      properties:
+        backlash:
+          default: 25
+          description: Distance to undershoot, before correction move.
+          minimum: 0
+          type: integer
+        dz:
+          default: 2000
+          description: Total Z range to search over (in stage steps)
+          example: 2000
+          type: integer
+        initial_move_up:
+          default: true
+          description: Set to False to disable the initial move upwards
+          type: boolean
+        target_z:
+          default: 0
+          description: Target finishing position, relative to the focus.
+          example: -100
+          type: integer
+      type: object
+    measure_settling_timeInput:
+      properties:
+        delay:
+          default: 5
+          description: How long to measure sharpness for after the move, in seconds
+          example: 5
+          type: integer
+        dz:
+          default: 500
+          description: Total Z range to move down, then up (in stage steps)
+          example: 500
+          type: integer
+      type: object
+    move_and_measureInput:
+      properties:
+        dz:
+          description: The relative Z move to make
+          type: integer
+      required:
+      - dz
+      type: object
+info:
+  title: OpenFlexure Microscope openflexure:microscope:4828ac68-f2ed-4f3f-bcf9-bcde90c34728
+  version: 2.11.0
+openapi: 3.0.2
+paths:
+  /api/v2/:
+    get:
+      description: "A W3C compliant Thing Description is a JSON representation\nof\
+        \ the API, including links to different endpoints.\nYou can browse it directly\
+        \ (e.g. in Firefox), though for \ninteractive API documentation you should\
+        \ try the swagger-ui \ndocs, at `docs/swagger-ui/`"
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json: {}
+          description: W3C Thing Description
+      summary: Thing Description
+      tags: []
+  /api/v2/extensions:
+    get:
+      description: 'List enabled extensions.
+
+
+        Returns a list of Extension representations, including basic documentation.
+
+        Describes server methods, web views, and other relevant Lab Things metadata.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Extension'
+          description: A list of available extensions and their properties
+      summary: List enabled extensions.
+      tags:
+      - extensions
+  /api/v2/actions:
+    get:
+      description: 'Action queue
+
+
+        This endpoint returns a list of all actions that have run since
+
+        the server was started, including ones that have completed and
+
+        actions that are still running.  Each entry includes links to
+
+        manage and inspect that action.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Action'
+                type: array
+          description: List of Action objects
+      summary: Action queue
+      tags: []
+  /api/v2/actions/{task_id}:
+    delete:
+      description: 'Cancel a running Action
+
+
+        A `DELETE` request will stop a running action.'
+      parameters:
+      - description: The unique ID of the action
+        example: eeae7ae9-0c0d-45a4-9ef2-7b84bb67a1d1
+        in: path
+        name: task_id
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action object that was cancelled
+        '404':
+          description: Action not found
+      summary: Cancel a running Action
+      tags: []
+    get:
+      description: 'Show the status of an Action
+
+
+        A `GET` request will return the current status
+
+        of an action, including logs.  For completed
+
+        actions, it will include the return value.'
+      parameters:
+      - description: The unique ID of the action
+        example: eeae7ae9-0c0d-45a4-9ef2-7b84bb67a1d1
+        in: path
+        name: task_id
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action object
+        '404':
+          description: Action not found
+      summary: Show the status of an Action
+      tags: []
+  /api/v2/events/logging:
+    get:
+      description: Default method for GET requests. Returns the action queue (including
+        already finished actions) for this action
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    properties:
+                      created:
+                        format: date-time
+                        type: string
+                      filename:
+                        type: string
+                      levelname:
+                        type: string
+                      levelno:
+                        format: integer
+                        type: number
+                      lineno:
+                        format: integer
+                        type: number
+                      message:
+                        type: string
+                      name:
+                        type: string
+                    type: object
+                  event:
+                    type: string
+                  timestamp:
+                    format: date-time
+                    type: string
+                type: object
+          description: Event queue
+      summary: Default method for GET requests. Returns the action queue (including
+        already finished actions) for this action
+      tags:
+      - events
+  /api/v2/extensions/org.openflexure.autofocus/static/{path}:
+    get:
+      description: Files and folders within this path will be served from a static
+        directory.
+      parameters:
+      - description: Path to the static file
+        example: style.css
+        in: path
+        name: path
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          description: Static file
+        '404':
+          description: Static file not found
+      summary: Serve static files
+      tags: []
+  /api/v2/extensions/org.openflexure.autofocus/measure_sharpness:
+    post:
+      description: 'Measure the sharpness from the MJPEG stream
+
+
+        Take a JPEG snapshot from the camera (extracted from the live preview stream)
+
+        and return its size.  This is the sharpness metric used by the fast autofocus
+
+        method.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+      summary: Measure the sharpness from the MJPEG stream
+      tags: []
+  /api/v2/extensions/org.openflexure.autofocus/autofocus:
+    post:
+      description: "Perform a simple autofocus routine.\n\nThe stage is moved to z\
+        \ positions (relative to current position) in dz,\nand at each position an\
+        \ image is captured and the sharpness function \nevaulated.  We then move\
+        \ back to the position where the sharpness was\nhighest.  No interpolation\
+        \ is performed.\n\ndz is assumed to be in ascending order (starting at -ve\
+        \ values)\n\nThis `POST` request starts an Action, i.e. the hardware will\
+        \ do something\nthat may continue after the HTTP request has been responded\
+        \ to.  The \nresponse will always be an Action object, that details the current\
+        \ \nstatus of the action and provides an interface to poll for completion.\n\
+        \nIf the action completes within a specified timeout, we will return\nan HTTP\
+        \ status code of `200` and the return value will include any\noutput from\
+        \ the action.  If it does not complete, we will return a\n`201` response code,\
+        \ and the action's endpoint may be polled to follow\nits progress."
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/autofocusInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id003
+                  $ref: '#/components/schemas/Action'
+                - &id004
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/autofocusInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id003
+                - *id004
+          description: Action started
+      summary: Perform a simple autofocus routine.
+      tags:
+      - actions
+    get:
+      description: 'List running and completed `autofocus` actions.
+
+
+        This `GET` request will return a list of `Action` objects corresponding
+
+        to the `autofocus` action.  It will include all the times it has
+
+        been run since the server was last restarted, including running, completed,
+
+        and failed attempts.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id003
+                  - *id004
+                type: array
+          description: Action queue
+      summary: List running and completed `autofocus` actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.autofocus/fast_autofocus:
+    post:
+      description: "Perform a fast down-up-down-up autofocus\n\nThis \"fast\" autofocus\
+        \ method moves the stage continuously in Z, while\nfollowing the sharpness\
+        \ using the MJPEG stream.  This version is the\nsimplest \"fast\" autofocus\
+        \ method, and performs the following sequence \nof moves:\n\n1. Move to `-dz/2`,\
+        \ i.e. the bottom of the range\n2. Move up by `dz`, i.e. to the top of the\
+        \ range, while recording the\n   sharpness of the image as a function of time.\
+        \  Record the estimated\n   position of the stage when the sharpness was maximised,\
+        \ `fz`.\n3. Move back to the bottom (by `-dz`)\n4. Move up to the position\
+        \ where it was sharpest.\n\n## Backlash correction\nThis routine should cancel\
+        \ out backlash: the stage is moving upwards as\nwe record the sharpnes vs\
+        \ z data, and it is also moving upwards when\nwe make the final move to the\
+        \ sharpest point.  Mechanical backlash should\ntherefore be the same in both\
+        \ cases.\n\nThis does not account for lag between the sharpness measurements\
+        \ and the\nstage's motion; that has been tested for and seems not to be a\
+        \ big issue\nmost of the time, but may need to be accounted for in the future,\
+        \ if\nhardware or software changes increase the latency.\n\n## Sharpness metric\n\
+        This method uses the MJPEG preview stream to estimate the sharpness of\nthe\
+        \ image.  MJPEG streams consist of a series of independent JPEG images,\n\
+        so each frame can be looked at in isolation (though see later for an \nimportant\
+        \ caveat).  JPEG images are compressed lossily, by taking the \ndiscrete cosine\
+        \ transform (DCT) of each 8x8 block in the image.  A very\nrough precis of\
+        \ how this works is that after the DCT, cosine components \nthat are deemed\
+        \ unimportant (i.e. smaller than a threshold) are discarded.\nThe effect is\
+        \ that images with lots of high-frequency information have a\nlarger file\
+        \ size.\n\nWe look only at the size of each JPEG frame in the stream, so we\
+        \ get a\nremarkably robust estimate of image sharpness without even opening\
+        \ the \nimages!  That's what lets us analyse 30 images/second even on the\
+        \ very\nlimited processing power available to the Raspberry Pi 3.\n\n## Warning:\
+        \ frame independence\nWe assume that JPEG frames are independent.  This is\
+        \ only true if the\nMJPEG stream is encoded at *constant quality* without\
+        \ any additional\nbit rate control.  By default, many streams will reduce\
+        \ the quality\nfactor if they exceed a target bit rate, which badly affects\
+        \ this\nmethod.  We turn off bit rate limiting for the Raspberry Pi camera,\n\
+        which fixes the problem, at the expense of sometimes failing if\nparticularly\
+        \ sharp images appear in the stream, as there is a fairly\nsmall maximum size\
+        \ for each JPEG frame beyond which empty images are \nreturned.\n\n## Estimation\
+        \ of sharpness vs z\nWhat we record during an autofocus is two time series,\
+        \ from two parallel\nthreads.  One thread monitors the camera, and records\
+        \ the size of each\nJPEG frame as a function of time.  NB this is time from\
+        \ `time.time()`\nin Python, so will not be microsecond-accurate.  The other\
+        \ thread is\nresponsible for moving the stage, and records its current Z position\
+        \ \nbefore and after each move.  Interpolating between these `(t, z)` points\n\
+        gives us a `z` value for each JPEG size, and so we can estimate the \nJPEG\
+        \ size as a function of `z` and hence determine the `z` value at \nwhich sharpness\
+        \ is maximised.\n\nThis `POST` request starts an Action, i.e. the hardware\
+        \ will do something\nthat may continue after the HTTP request has been responded\
+        \ to.  The \nresponse will always be an Action object, that details the current\
+        \ \nstatus of the action and provides an interface to poll for completion.\n\
+        \nIf the action completes within a specified timeout, we will return\nan HTTP\
+        \ status code of `200` and the return value will include any\noutput from\
+        \ the action.  If it does not complete, we will return a\n`201` response code,\
+        \ and the action's endpoint may be polled to follow\nits progress."
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/fast_autofocusInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id005
+                  $ref: '#/components/schemas/Action'
+                - &id006
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/fast_autofocusInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id005
+                - *id006
+          description: Action started
+      summary: Perform a fast down-up-down-up autofocus
+      tags:
+      - actions
+    get:
+      description: 'List running and completed `fast_autofocus` actions.
+
+
+        This `GET` request will return a list of `Action` objects corresponding
+
+        to the `fast_autofocus` action.  It will include all the times it has
+
+        been run since the server was last restarted, including running, completed,
+
+        and failed attempts.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id005
+                  - *id006
+                type: array
+          description: Action queue
+      summary: List running and completed `fast_autofocus` actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.autofocus/fast_up_down_up_autofocus:
+    post:
+      description: "Perform a fast up-down-up autofocus, with feedback\n\nAutofocus\
+        \ by measuring on the way down, and moving back up with feedback.\nThis is\
+        \ a \"fast\" autofocus method, i.e. it moves the stage continuously\nwhile\
+        \ monitoring the sharpness using the MJPEG stream. See `fast_autofocus`\n\
+        for more details.\n\nThis autofocus method is very efficient, as it only passes\
+        \ the peak once.\nThe sequence of moves it performs is:\n\n1.  Move to the\
+        \ top of the range `dz/2` (can be disabled)\n\n2.  Move down by `dz` while\
+        \ monitoring JPEG size to find the focus.\n\n3.  Move back up to the `target_z`\
+        \ position, relative to the sharpest image.\n\n4.  Measure the sharpness,\
+        \ and compare against the curve recorded in (2) to \\\n    estimate how much\
+        \ further we need to go.  Make this move, to reach our \\\n    target position.\n\
+        \nMoving back to the target position in two steps allows us to correct for\n\
+        backlash, by using the sharpness-vs-z curve as a rough encoder for Z. The\n\
+        main source of error is that the curves on the way up and the way down are\
+        \ \nnot always identical, largely due to small lateral shifts as the Z axis\
+        \ is\nmoved.\n\nParameters:\n  * `dz`: number of steps over which to scan\
+        \ (optional, default 2000)\n\n  * `target_z`: we aim to finish at this position,\
+        \ relative to focus.  This may \n    be useful if, for example, you want to\
+        \ acquire a stack of images in Z. \n    It is optional, and the default value\
+        \ of 0 will finish at the focus.\n\n  * `initial_move_up`: (optional, default\
+        \ True) set this to `False` to move down\n    from the starting position.\
+        \  Mostly useful if you're able to combine\n    the initial move with something\
+        \ else, e.g. moving to the next scan point.\n\n  * **backlash**: (optional,\
+        \ default 25) is a small extra move made in step\n    3 to help counteract\
+        \ backlash.  It should be small enough that you\n    would always expect there\
+        \ to be greater backlash than this.  Too small\n    might slightly hurt accuracy,\
+        \ but is unlikely to be a big issue.  Too big\n    may cause you to overshoot,\
+        \ which is a problem.\n\n  * **mini_backlash**: (optional, default 25) is\
+        \ an alias for `backlash` and will be\n    removed in due course.\n\nThis\
+        \ `POST` request starts an Action, i.e. the hardware will do something\nthat\
+        \ may continue after the HTTP request has been responded to.  The \nresponse\
+        \ will always be an Action object, that details the current \nstatus of the\
+        \ action and provides an interface to poll for completion.\n\nIf the action\
+        \ completes within a specified timeout, we will return\nan HTTP status code\
+        \ of `200` and the return value will include any\noutput from the action.\
+        \  If it does not complete, we will return a\n`201` response code, and the\
+        \ action's endpoint may be polled to follow\nits progress."
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/fast_up_down_up_autofocusInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id007
+                  $ref: '#/components/schemas/Action'
+                - &id008
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/fast_up_down_up_autofocusInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id007
+                - *id008
+          description: Action started
+      summary: Perform a fast up-down-up autofocus, with feedback
+      tags:
+      - actions
+    get:
+      description: 'List running and completed `fast_up_down_up_autofocus` actions.
+
+
+        This `GET` request will return a list of `Action` objects corresponding
+
+        to the `fast_up_down_up_autofocus` action.  It will include all the times
+        it has
+
+        been run since the server was last restarted, including running, completed,
+
+        and failed attempts.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id007
+                  - *id008
+                type: array
+          description: Action queue
+      summary: List running and completed `fast_up_down_up_autofocus` actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.autofocus/measure_settling_time:
+    post:
+      description: "Make a Z move down then up by dz, then pause for delay while monitoring\
+        \ sharpness.\nThis is useful so we can see how long we need to wait for the\
+        \ sharpness value to converge\n\nThis `POST` request starts an Action, i.e.\
+        \ the hardware will do something\nthat may continue after the HTTP request\
+        \ has been responded to.  The \nresponse will always be an Action object,\
+        \ that details the current \nstatus of the action and provides an interface\
+        \ to poll for completion.\n\nIf the action completes within a specified timeout,\
+        \ we will return\nan HTTP status code of `200` and the return value will include\
+        \ any\noutput from the action.  If it does not complete, we will return a\n\
+        `201` response code, and the action's endpoint may be polled to follow\nits\
+        \ progress."
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/measure_settling_timeInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id009
+                  $ref: '#/components/schemas/Action'
+                - &id010
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/measure_settling_timeInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id009
+                - *id010
+          description: Action started
+      summary: Make a Z move down then up by dz, then pause for delay while monitoring
+        sharpness.
+      tags:
+      - actions
+    get:
+      description: 'List running and completed `measure_settling_time` actions.
+
+
+        This `GET` request will return a list of `Action` objects corresponding
+
+        to the `measure_settling_time` action.  It will include all the times it has
+
+        been run since the server was last restarted, including running, completed,
+
+        and failed attempts.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id009
+                  - *id010
+                type: array
+          description: Action queue
+      summary: List running and completed `measure_settling_time` actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.autofocus/move_and_measure:
+    post:
+      description: "Make a relative move in Z and measure dynamic sharpness\n\nThis\
+        \ accesses the underlying method used by the fast autofocus routines, to\n\
+        move the stage while monitoring the sharpness, as reported by the size of\n\
+        each JPEG frame in the preview stream.  It returns a dictionary with\nstage\
+        \ position vs time and image size (i.e. sharpness) vs time.\n\nThis `POST`\
+        \ request starts an Action, i.e. the hardware will do something\nthat may\
+        \ continue after the HTTP request has been responded to.  The \nresponse will\
+        \ always be an Action object, that details the current \nstatus of the action\
+        \ and provides an interface to poll for completion.\n\nIf the action completes\
+        \ within a specified timeout, we will return\nan HTTP status code of `200`\
+        \ and the return value will include any\noutput from the action.  If it does\
+        \ not complete, we will return a\n`201` response code, and the action's endpoint\
+        \ may be polled to follow\nits progress."
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/move_and_measureInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id011
+                  $ref: '#/components/schemas/Action'
+                - &id012
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/move_and_measureInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id011
+                - *id012
+          description: Action started
+      summary: Make a relative move in Z and measure dynamic sharpness
+      tags:
+      - actions
+    get:
+      description: 'List running and completed `move_and_measure` actions.
+
+
+        This `GET` request will return a list of `Action` objects corresponding
+
+        to the `move_and_measure` action.  It will include all the times it has
+
+        been run since the server was last restarted, including running, completed,
+
+        and failed attempts.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id011
+                  - *id012
+                type: array
+          description: Action queue
+      summary: List running and completed `move_and_measure` actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.scan/static/{path}:
+    get:
+      description: Files and folders within this path will be served from a static
+        directory.
+      parameters:
+      - description: Path to the static file
+        example: style.css
+        in: path
+        name: path
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          description: Static file
+        '404':
+          description: Static file not found
+      summary: Serve static files
+      tags: []
+  /api/v2/extensions/org.openflexure.scan/tile:
+    post:
+      description: ''
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TileScanArgs'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id013
+                  $ref: '#/components/schemas/Action'
+                - &id014
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/TileScanArgs'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id013
+                - *id014
+          description: Action started
+      summary: ''
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id013
+                  - *id014
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.zipbuilder/static/{path}:
+    get:
+      description: Files and folders within this path will be served from a static
+        directory.
+      parameters:
+      - description: Path to the static file
+        example: style.css
+        in: path
+        name: path
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          description: Static file
+        '404':
+          description: Static file not found
+      summary: Serve static files
+      tags: []
+  /api/v2/extensions/org.openflexure.zipbuilder/get/{session_id}:
+    delete:
+      description: Close and delete a particular capture collection ZIP file
+      parameters:
+      - description: The unique ID of the zip builder session
+        in: path
+        name: session_id
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '404':
+          description: The session ID could not be found
+        '200':
+          description: The zip file was deleted
+      summary: Close and delete a particular capture collection ZIP file
+      tags: []
+    get:
+      description: Download a particular capture collection ZIP file
+      parameters:
+      - description: The unique ID of the zip builder session
+        in: path
+        name: session_id
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '404':
+          description: The session ID could not be found
+        '200':
+          content:
+            application/zip: {}
+          description: A zip archive containing the selected captures
+      summary: Download a particular capture collection ZIP file
+      tags: []
+  /api/v2/extensions/org.openflexure.zipbuilder/get:
+    get:
+      description: "List all the zip files currently available for download.\n    "
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ZipObject'
+                type: array
+          description: Read property
+      summary: List all the zip files currently available for download.
+      tags:
+      - properties
+  /api/v2/extensions/org.openflexure.zipbuilder/build:
+    post:
+      description: 'Build a zip file of some captures
+
+
+        Given a list of capture IDs as its argument, this action will
+
+        create a zip file that can be downloaded once the action has
+
+        completed.'
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              items:
+                type: string
+              type: array
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id015
+                  $ref: '#/components/schemas/Action'
+                - &id016
+                  properties:
+                    input:
+                      items:
+                        type: string
+                      type: array
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id015
+                - *id016
+          description: Action started
+      summary: Build a zip file of some captures
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id015
+                  - *id016
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.autostorage/static/{path}:
+    get:
+      description: Files and folders within this path will be served from a static
+        directory.
+      parameters:
+      - description: Path to the static file
+        example: style.css
+        in: path
+        name: path
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          description: Static file
+        '404':
+          description: Static file not found
+      summary: Serve static files
+      tags: []
+  /api/v2/extensions/org.openflexure.autostorage/list-locations:
+    get:
+      description: ''
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Read property
+      summary: ''
+      tags:
+      - properties
+  /api/v2/extensions/org.openflexure.autostorage/location:
+    post:
+      description: ''
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              example: Default
+              type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                example: Default
+                type: string
+          description: Write property
+      summary: ''
+      tags:
+      - properties
+    get:
+      description: ''
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                example: Default
+                type: string
+          description: Read property
+      summary: ''
+      tags:
+      - properties
+  /api/v2/extensions/org.openflexure.autostorage/location-from-title:
+    post:
+      description: ''
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+      summary: ''
+      tags: []
+  /api/v2/extensions/org.openflexure.calibration.picamera/static/{path}:
+    get:
+      description: Files and folders within this path will be served from a static
+        directory.
+      parameters:
+      - description: Path to the static file
+        example: style.css
+        in: path
+        name: path
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          description: Static file
+        '404':
+          description: Static file not found
+      summary: Serve static files
+      tags: []
+  /api/v2/extensions/org.openflexure.calibration.picamera/recalibrate:
+    post:
+      description: "Reset the camera's settings.\n\nThis generates new gains, exposure\
+        \ time, and lens shading\ntable such that the background is as uniform as\
+        \ possible\nwith a gray level of 230.  It takes a little while to run.\n\n\
+        This consists of three steps:\n\n* Reset gain and exposure time, then increase\
+        \ them until\n  we have a suitably bright image\n* Set the auto white balance\
+        \ based on a raw image\n* Set the lens shading table based on a raw image\n\
+        \nEach of these steps has its own endpoint if you want to\nperform them separately."
+      parameters: []
+      requestBody:
+        content:
+          application/json: {}
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action started
+      summary: Reset the camera's settings.
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Action'
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.calibration.picamera/flatten_lens_shading_table:
+    post:
+      description: ''
+      parameters: []
+      requestBody:
+        content:
+          application/json: {}
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action started
+      summary: ''
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Action'
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.calibration.picamera/delete_lens_shading_table:
+    post:
+      description: ''
+      parameters: []
+      requestBody:
+        content:
+          application/json: {}
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action started
+      summary: ''
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Action'
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.calibration.picamera/get_raw_channel_percentiles:
+    post:
+      description: ''
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetRawChannelPercentilesViewInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id017
+                  $ref: '#/components/schemas/Action'
+                - &id018
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/GetRawChannelPercentilesViewInput'
+                    output:
+                      items:
+                        type: integer
+                      type: array
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id017
+                - *id018
+          description: Action started
+      summary: ''
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id017
+                  - *id018
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.calibration.picamera/auto_exposure_from_raw:
+    post:
+      description: ''
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutoExposureFromRawViewInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id019
+                  $ref: '#/components/schemas/Action'
+                - &id020
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/AutoExposureFromRawViewInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id019
+                - *id020
+          description: Action started
+      summary: ''
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id019
+                  - *id020
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.calibration.picamera/auto_white_balance_from_raw:
+    post:
+      description: ''
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutoWhiteBalanceFromRawViewInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id021
+                  $ref: '#/components/schemas/Action'
+                - &id022
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/AutoWhiteBalanceFromRawViewInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id021
+                - *id022
+          description: Action started
+      summary: ''
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id021
+                  - *id022
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.calibration.picamera/auto_lens_shading_table:
+    post:
+      description: 'Perform flat-field correction
+
+
+        This routine acquires a new image (which should be an
+
+        empty field of view, i.e. a perfect microscope would
+
+        record a uniform white image), and then uses it to set
+
+        the "lens shading table" such that future images will
+
+        be corrected for vignetting.'
+      parameters: []
+      requestBody:
+        content:
+          application/json: {}
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action started
+      summary: Perform flat-field correction
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Action'
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.camera-stage-mapping/static/{path}:
+    get:
+      description: Files and folders within this path will be served from a static
+        directory.
+      parameters:
+      - description: Path to the static file
+        example: style.css
+        in: path
+        name: path
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          description: Static file
+        '404':
+          description: Static file not found
+      summary: Serve static files
+      tags: []
+  /api/v2/extensions/org.openflexure.camera-stage-mapping/calibrate_1d:
+    post:
+      description: Calibrate one axis of the microscope stage against the camera.
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Calibrate1DViewInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id023
+                  $ref: '#/components/schemas/Action'
+                - &id024
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/Calibrate1DViewInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id023
+                - *id024
+          description: Action started
+      summary: Calibrate one axis of the microscope stage against the camera.
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id023
+                  - *id024
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.camera-stage-mapping/calibrate_xy:
+    post:
+      description: Calibrate both axes of the microscope stage against the camera.
+      parameters: []
+      requestBody:
+        content:
+          application/json: {}
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action started
+      summary: Calibrate both axes of the microscope stage against the camera.
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Action'
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.camera-stage-mapping/move_in_image_coordinates:
+    post:
+      description: Move the microscope stage, such that we move by a given number
+        of pixels on the camera
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveInImageCoordinatesViewInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id025
+                  $ref: '#/components/schemas/Action'
+                - &id026
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/MoveInImageCoordinatesViewInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id025
+                - *id026
+          description: Action started
+      summary: Move the microscope stage, such that we move by a given number of pixels
+        on the camera
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id025
+                  - *id026
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.camera-stage-mapping/closed_loop_move_in_image_coordinates:
+    post:
+      description: Move the microscope stage, such that we move by a given number
+        of pixels on the camera
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClosedLoopMoveInImageCoordinatesViewInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id027
+                  $ref: '#/components/schemas/Action'
+                - &id028
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/ClosedLoopMoveInImageCoordinatesViewInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id027
+                - *id028
+          description: Action started
+      summary: Move the microscope stage, such that we move by a given number of pixels
+        on the camera
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id027
+                  - *id028
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.camera-stage-mapping/test_closed_loop_spiral_scan:
+    post:
+      description: Move the microscope stage, such that we move by a given number
+        of pixels on the camera
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestClosedLoopSpiralScanViewInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id029
+                  $ref: '#/components/schemas/Action'
+                - &id030
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/TestClosedLoopSpiralScanViewInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id029
+                - *id030
+          description: Action started
+      summary: Move the microscope stage, such that we move by a given number of pixels
+        on the camera
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id029
+                  - *id030
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/extensions/org.openflexure.camera-stage-mapping/get_calibration:
+    get:
+      description: Get the calibration data in JSON format.
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Read property
+      summary: Get the calibration data in JSON format.
+      tags:
+      - properties
+  /api/v2/captures:
+    get:
+      description: List all image captures
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Capture'
+                type: array
+          description: Read property
+      summary: List all image captures
+      tags:
+      - captures
+      - properties
+  /api/v2/captures/{id_}:
+    delete:
+      description: Delete a single image capture
+      parameters:
+      - description: The unique ID of the capture
+        example: eeae7ae9-0c0d-45a4-9ef2-7b84bb67a1d1
+        in: path
+        name: id_
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+      summary: Delete a single image capture
+      tags:
+      - captures
+    get:
+      description: Description of a single image capture
+      parameters:
+      - description: The unique ID of the capture
+        example: eeae7ae9-0c0d-45a4-9ef2-7b84bb67a1d1
+        in: path
+        name: id_
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '404':
+          description: Capture object was not found
+      summary: Description of a single image capture
+      tags:
+      - captures
+  /api/v2/captures/{id_}/download/{filename}:
+    get:
+      description: Image data for a single image capture
+      parameters:
+      - description: The unique ID of the capture
+        example: eeae7ae9-0c0d-45a4-9ef2-7b84bb67a1d1
+        in: path
+        name: id_
+        required: true
+        schema:
+          type: string
+      - description: The filename of the downloaded image.
+        example: myimage.jpeg
+        in: path
+        name: filename
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            image/jpeg: {}
+          description: Image data in JPEG format
+      summary: Image data for a single image capture
+      tags:
+      - captures
+  /api/v2/captures/{id_}/tags:
+    put:
+      description: Add tags to a single image capture
+      parameters:
+      - description: The unique ID of the capture
+        example: eeae7ae9-0c0d-45a4-9ef2-7b84bb67a1d1
+        in: path
+        name: id_
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+      summary: Add tags to a single image capture
+      tags:
+      - captures
+    delete:
+      description: Delete tags from a single image capture
+      parameters:
+      - description: The unique ID of the capture
+        example: eeae7ae9-0c0d-45a4-9ef2-7b84bb67a1d1
+        in: path
+        name: id_
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+      summary: Delete tags from a single image capture
+      tags:
+      - captures
+    get:
+      description: Get tags associated with a single image capture
+      parameters:
+      - description: The unique ID of the capture
+        example: eeae7ae9-0c0d-45a4-9ef2-7b84bb67a1d1
+        in: path
+        name: id_
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+      summary: Get tags associated with a single image capture
+      tags:
+      - captures
+  /api/v2/captures/{id_}/annotations:
+    put:
+      description: Update metadata for a single image capture
+      parameters:
+      - description: The unique ID of the capture
+        example: eeae7ae9-0c0d-45a4-9ef2-7b84bb67a1d1
+        in: path
+        name: id_
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+      summary: Update metadata for a single image capture
+      tags:
+      - captures
+    get:
+      description: Get annotations associated with a single image capture
+      parameters:
+      - description: The unique ID of the capture
+        example: eeae7ae9-0c0d-45a4-9ef2-7b84bb67a1d1
+        in: path
+        name: id_
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+      summary: Get annotations associated with a single image capture
+      tags:
+      - captures
+  /api/v2/instrument/settings:
+    put:
+      description: Update current microscope settings, including camera and stage
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Write property
+      summary: Update current microscope settings, including camera and stage
+      tags:
+      - properties
+    get:
+      description: Current microscope settings, including camera and stage
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Read property
+      summary: Current microscope settings, including camera and stage
+      tags:
+      - properties
+  /api/v2/instrument/settings/{route}:
+    put:
+      description: Update a nested section of the current microscope settings
+      parameters:
+      - description: The location of a key or sub-dictionary. This is formatted like
+          a path, i.e. forward slashes delimit components of the path.
+        example: camera/exposure_time
+        in: path
+        name: route
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '404':
+          description: Settings key cannot be found
+      summary: Update a nested section of the current microscope settings
+      tags:
+      - properties
+    get:
+      description: Show a nested section of the current microscope settings
+      parameters:
+      - description: The location of a key or sub-dictionary. This is formatted like
+          a path, i.e. forward slashes delimit components of the path.
+        example: camera/exposure_time
+        in: path
+        name: route
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '404':
+          description: Settings key cannot be found
+      summary: Show a nested section of the current microscope settings
+      tags:
+      - properties
+  /api/v2/instrument/state:
+    get:
+      description: Show current read-only state of the microscope
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Read property
+      summary: Show current read-only state of the microscope
+      tags:
+      - properties
+  /api/v2/instrument/state/{route}:
+    get:
+      description: Show a nested section of the current microscope state
+      parameters:
+      - description: The location of a key or sub-dictionary. This is formatted like
+          a path, i.e. forward slashes delimit components of the path.
+        example: camera/exposure_time
+        in: path
+        name: route
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '404':
+          description: Status key cannot be found
+      summary: Show a nested section of the current microscope state
+      tags:
+      - properties
+  /api/v2/instrument/configuration:
+    get:
+      description: Show current read-only state of the microscope
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Read property
+      summary: Show current read-only state of the microscope
+      tags:
+      - properties
+  /api/v2/instrument/configuration/{route}:
+    get:
+      description: Show a nested section of the current microscope state
+      parameters:
+      - description: The location of a key or sub-dictionary. This is formatted like
+          a path, i.e. forward slashes delimit components of the path.
+        example: camera/exposure_time
+        in: path
+        name: route
+        required: true
+        schema:
+          type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '404':
+          description: Status key cannot be found
+      summary: Show a nested section of the current microscope state
+      tags:
+      - properties
+  /api/v2/instrument/stage/type:
+    put:
+      description: Set the stage geometry.
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              default: SangaStage
+              description: The translation stage geometry
+              enum:
+              - SangaStage
+              - SangaDeltaStage
+              example: SangaStage
+              type: string
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                default: SangaStage
+                description: The translation stage geometry
+                enum:
+                - SangaStage
+                - SangaDeltaStage
+                example: SangaStage
+                type: string
+          description: Write property
+      summary: Set the stage geometry.
+      tags:
+      - properties
+    get:
+      description: Get the stage geometry.
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                default: SangaStage
+                description: The translation stage geometry
+                enum:
+                - SangaStage
+                - SangaDeltaStage
+                example: SangaStage
+                type: string
+          description: Read property
+      summary: Get the stage geometry.
+      tags:
+      - properties
+  /api/v2/instrument/camera/lst:
+    get:
+      description: Get the lens shading table as an image.
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema: {}
+            image/jpeg: {}
+          description: Read property
+      summary: Get the lens shading table as an image.
+      tags:
+      - properties
+  /api/v2/streams/mjpeg:
+    get:
+      description: 'MJPEG stream from the microscope camera.
+
+
+        Note: While the code actually getting frame data from a camera and storing
+        it in
+
+        camera.frame runs in a thread, the gen(microscope.camera) generator does not.
+
+        This response is therefore blocking. The generator just yields the most recent
+
+        frame from the camera object, passed to the Flask response, and then repeats
+        until
+
+        the connection is closed.
+
+
+        Without monkey patching, or using a native threaded server, the stream
+
+        will block all proceeding requests.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema: {}
+            multipart/x-mixed-replace: {}
+          description: Read property
+      summary: MJPEG stream from the microscope camera.
+      tags:
+      - properties
+  /api/v2/streams/snapshot:
+    get:
+      description: Single snapshot from the camera stream
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema: {}
+            image/jpeg: {}
+          description: Read property
+      summary: Single snapshot from the camera stream
+      tags:
+      - properties
+  /api/v2/actions/camera/capture/:
+    post:
+      description: Create a new capture
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FullCaptureArgs'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id031
+                  $ref: '#/components/schemas/Action'
+                - &id032
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/FullCaptureArgs'
+                    output:
+                      $ref: '#/components/schemas/Capture'
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id031
+                - *id032
+          description: Action started
+      summary: Create a new capture
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id031
+                  - *id032
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/actions/camera/ram-capture/:
+    post:
+      description: Take a non-persistant image capture.
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BasicCaptureArgs'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id033
+                  $ref: '#/components/schemas/Action'
+                - &id034
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/BasicCaptureArgs'
+                    output: {}
+                  type: object
+            image/jpeg: {}
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id033
+                - *id034
+          description: Action started
+      summary: Take a non-persistant image capture.
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id033
+                  - *id034
+                type: array
+            image/jpeg: {}
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/actions/camera/preview/start:
+    post:
+      description: Start the onboard GPU preview.
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GPUPreviewStartAPIInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id035
+                  $ref: '#/components/schemas/Action'
+                - &id036
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/GPUPreviewStartAPIInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id035
+                - *id036
+          description: Action started
+      summary: Start the onboard GPU preview.
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id035
+                  - *id036
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/actions/camera/preview/stop:
+    post:
+      description: Stop the onboard GPU preview.
+      parameters: []
+      requestBody:
+        content:
+          application/json: {}
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action started
+      summary: Stop the onboard GPU preview.
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Action'
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/actions/stage/move/:
+    post:
+      description: 'Move the microscope stage in x, y, z
+
+
+        This action moves the stage. Any axes that are not specifed will not move.
+
+        If `absolute=True` is specified, the stage will move to the absolute
+
+        coordinates given.  If not (the default), a relative move is made, i.e.
+
+        `x=0, y=0, z=0` corresponds to no motion.'
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveStageAPIInput'
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - &id037
+                  $ref: '#/components/schemas/Action'
+                - &id038
+                  properties:
+                    input:
+                      $ref: '#/components/schemas/MoveStageAPIInput'
+                    output: {}
+                  type: object
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                allOf:
+                - *id037
+                - *id038
+          description: Action started
+      summary: Move the microscope stage in x, y, z
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  allOf:
+                  - *id037
+                  - *id038
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/actions/stage/zero/:
+    post:
+      description: 'Zero the stage coordinates.
+
+
+        This action does not move the stage, but rather makes the current position
+        read as [0, 0, 0]'
+      parameters: []
+      requestBody:
+        content:
+          application/json: {}
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action started
+      summary: Zero the stage coordinates.
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Action'
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/actions/system/shutdown/:
+    post:
+      description: Attempt to shutdown the device
+      parameters: []
+      requestBody:
+        content:
+          application/json: {}
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action started
+      summary: Attempt to shutdown the device
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Action'
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/actions/system/reboot/:
+    post:
+      description: Attempt to reboot the device
+      parameters: []
+      requestBody:
+        content:
+          application/json: {}
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action completed immediately
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Action'
+          description: Action started
+      summary: Attempt to reboot the device
+      tags:
+      - actions
+    get:
+      description: 'List running and completed actions.
+
+
+        Actions are run with `POST` requests.  See the `POST` method for this URL
+        for
+
+        details of the action.  Sending a `GET` request to an action endpoint will
+        return
+
+        action descriptions for each time the action has been run, including whether
+        they
+
+        have completed, and any return values.'
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Action'
+                type: array
+          description: Action queue
+      summary: List running and completed actions.
+      tags:
+      - actions
+  /api/v2/log:
+    get:
+      description: Most recent 1mb of log output
+      parameters: []
+      responses:
+        5XX:
+          content:
+            application/json:
+              schema:
+                properties:
+                  code:
+                    format: integer
+                    type: number
+                  message:
+                    type: string
+                  name:
+                    type: string
+                type: object
+          description: Unexpected error
+      summary: Most recent 1mb of log output
+      tags: []
+tags:
+- description: Actions that can be run on the microscope.  These endpoints represent
+    actions that many not complete immediately, so they run on the server as `Action`
+    objects and their status can be queried using the links embedded in the JSON action
+    description.
+  externalDocs:
+    description: W3C's description of Web of Things 'Action' resources.
+    url: https://www.w3.org/TR/wot-thing-description/#actionaffordance
+  name: actions
+- description: Properties can be read and/or written to, and affect the state of the
+    microscope.
+  externalDocs:
+    description: W3C's description of Web of Things 'Property' resources.
+    url: https://www.w3.org/TR/wot-thing-description/#propertyaffordance
+  name: properties
+- description: ''
+  name: captures
+- description: ''
+  name: extensions
+- description: ''
+  name: events

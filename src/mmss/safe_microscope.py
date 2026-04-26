@@ -117,11 +117,11 @@ class SafeMicroscopeWrapper:
             return True
         
         try:
-            # WoT API: /api/v2/actions/MoveAPI
-            move_data = {'z': distance_um} if relative else {'z': distance_um, 'absolute': True}
+            # OpenFlexure API v2: /api/v2/actions/stage/move/
+            move_data = {'z': distance_um, 'absolute': not relative}
             
             response = requests.post(
-                f"{self.server_url}/api/v2/actions/MoveAPI",
+                f"{self.server_url}/api/v2/actions/stage/move/",
                 json=move_data,
                 timeout=10
             )
@@ -151,11 +151,11 @@ class SafeMicroscopeWrapper:
             return True
         
         try:
-            # WoT API: /api/v2/actions/MoveAPI
-            move_data = {'x': x_um, 'y': y_um} if relative else {'x': x_um, 'y': y_um, 'absolute': True}
+            # OpenFlexure API v2: /api/v2/actions/stage/move/
+            move_data = {'x': x_um, 'y': y_um, 'absolute': not relative}
             
             response = requests.post(
-                f"{self.server_url}/api/v2/actions/MoveAPI",
+                f"{self.server_url}/api/v2/actions/stage/move/",
                 json=move_data,
                 timeout=10
             )
@@ -188,45 +188,37 @@ class SafeMicroscopeWrapper:
             return fake_path
         
         try:
-            # WoT API: пробуем разные методы для захвата
-            # Сначала пробуем PUT (стандарт для WoT actions)
-            response = requests.put(
-                f"{self.server_url}/api/v2/actions/CaptureAPI",
+            # OpenFlexure API v2: /api/v2/actions/camera/capture/
+            response = requests.post(
+                f"{self.server_url}/api/v2/actions/camera/capture/",
                 json={},
                 timeout=30
             )
             
-            # Если PUT не работает, пробуем POST
-            if response.status_code == 405:
-                logger.info("PUT not allowed, trying POST...")
-                response = requests.post(
-                    f"{self.server_url}/api/v2/actions/CaptureAPI",
-                    json={},
-                    timeout=30
-                )
-            
             if not self._validate_response(response, "CAPTURE_IMAGE"):
                 return None
             
-            # Получить изображение из ответа
+            # Получить Action объект из ответа
             data = response.json()
             
-            # WoT API возвращает разные форматы, проверяем несколько вариантов
-            image_url = None
-            if 'image' in data:
-                image_url = data['image'].get('filename')
-            elif 'filename' in data:
-                image_url = data['filename']
-            elif 'result' in data and 'filename' in data['result']:
-                image_url = data['result']['filename']
-            
-            if not image_url:
-                logger.error("❌ No image URL in response")
+            # Action возвращает output с Capture объектом
+            capture = data.get('output')
+            if not capture:
+                logger.error("❌ No capture in response")
                 logger.error(f"Response data: {data}")
                 return None
             
-            # Скачать изображение
-            image_response = requests.get(f"{self.server_url}{image_url}", timeout=30)
+            # Получить ID и имя файла из Capture объекта
+            capture_id = capture.get('id')
+            capture_filename = capture.get('path', '').split('/')[-1] or f"{capture_id}.jpg"
+            
+            if not capture_id:
+                logger.error("❌ No capture ID in response")
+                return None
+            
+            # Скачать изображение через /api/v2/captures/{id}/download/{filename}
+            download_url = f"{self.server_url}/api/v2/captures/{capture_id}/download/{capture_filename}"
+            image_response = requests.get(download_url, timeout=30)
             image_response.raise_for_status()
             
             # Сохранить изображение
@@ -244,29 +236,19 @@ class SafeMicroscopeWrapper:
             return None
     
     def get_status(self) -> Optional[Dict]:
-        """Get microscope status from server (WoT API)"""
+        """Get microscope status from server (OpenFlexure API v2)"""
         try:
-            # Получить позицию через properties
-            position_response = requests.get(
-                f"{self.server_url}/api/v2/properties/position",
-                timeout=5
-            )
-            
-            # Получить информацию о камере через properties
-            camera_response = requests.get(
-                f"{self.server_url}/api/v2/properties/camera_settings",
+            # Получить состояние через /api/v2/instrument/state
+            state_response = requests.get(
+                f"{self.server_url}/api/v2/instrument/state",
                 timeout=5
             )
             
             status = {}
             
-            if position_response.status_code == 200:
-                pos_data = position_response.json()
-                status['position'] = pos_data
-            
-            if camera_response.status_code == 200:
-                cam_data = camera_response.json()
-                status['camera'] = cam_data
+            if state_response.status_code == 200:
+                state_data = state_response.json()
+                status['state'] = state_data
             
             status['server_url'] = self.server_url
             status['safe_mode'] = self.safe_mode
