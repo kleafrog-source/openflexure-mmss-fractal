@@ -93,6 +93,31 @@ def _build_advice_list(advice: Dict[str, Any]) -> str:
     return "\n".join(items)
 
 
+def _build_context_list(context: Dict[str, Any]) -> str:
+    if not context:
+        return "<li>No microscope context captured for this session.</li>"
+
+    priority_keys = [
+        "server_url",
+        "captured_at_unix",
+        "stage_position",
+        "instrument_state",
+        "instrument_settings",
+        "camera_stage_mapping",
+    ]
+    items = []
+    seen = set()
+    for key in priority_keys + [k for k in context.keys() if k not in priority_keys]:
+        if key in seen or key not in context:
+            continue
+        seen.add(key)
+        value = context[key]
+        if isinstance(value, (dict, list)):
+            value = json.dumps(value, ensure_ascii=False)
+        items.append(f"<li><strong>{html.escape(str(key))}:</strong> {html.escape(str(value))}</li>")
+    return "\n".join(items)
+
+
 def _build_vision_list(vision: Dict[str, Any], vision_status: str | None = None, vision_error: str | None = None) -> str:
     if not vision:
         if vision_error:
@@ -174,6 +199,7 @@ def _render_session_html(session_meta: Dict[str, Any], results: Dict[str, Any]) 
     vision_analysis = session_meta.get("vision_analysis", {})
     vision_status = session_meta.get("vision_status")
     vision_error = session_meta.get("vision_error")
+    microscope_context = session_meta.get("microscope_context", {})
     raw_json = html.escape(json.dumps(results, indent=2, ensure_ascii=False))
     
     # Check which analysis modes are available
@@ -487,6 +513,13 @@ def _render_session_html(session_meta: Dict[str, Any], results: Dict[str, Any]) 
               <li>Viewer: index.html</li>
             </ul>
           </div>
+
+          <div class="panel">
+            <div class="eyebrow">Microscope Context</div>
+            <ul class="advice-list">
+              {_build_context_list(microscope_context)}
+            </ul>
+          </div>
         </div>
       </div>
     </section>
@@ -781,6 +814,12 @@ def _render_gallery_html(sessions: list[Dict[str, Any]]) -> str:
     .batch-controls .btn-vision:hover {{
       background: #9a4624;
     }}
+    .batch-controls .btn-stitch {{
+      background: #2d6a4f;
+    }}
+    .batch-controls .btn-stitch:hover {{
+      background: #23533e;
+    }}
     .batch-status {{
       color: var(--muted);
       font-size: 14px;
@@ -810,6 +849,7 @@ def _render_gallery_html(sessions: list[Dict[str, Any]]) -> str:
       <button class="btn-invariants" onclick="runBatchAnalysis('invariants')">Run Invariants on Selected</button>
       <button class="btn-hybrid" onclick="runBatchAnalysis('hybrid')">Run Hybrid on Selected</button>
       <button class="btn-vision" onclick="runBatchAnalysis('vision_only')">Run Vision Only on Selected</button>
+      <button class="btn-stitch" onclick="runStitchSelected()">Stitch Selected</button>
       <span id="batchStatus" class="batch-status">Select images to analyze</span>
       <div class="batch-progress">
         <div id="batchProgressBar" class="batch-progress-bar"></div>
@@ -881,6 +921,45 @@ def _render_gallery_html(sessions: list[Dict[str, Any]]) -> str:
       status.textContent = `Completed ${{sessionIds.length}} images (${{mode}})`;
       buttons.forEach(btn => btn.disabled = false);
       setTimeout(() => location.reload(), 2000);
+    }}
+
+    async function runStitchSelected() {{
+      const checkboxes = document.querySelectorAll('.session-checkbox:checked');
+      if (checkboxes.length < 2) {{
+        alert('Select at least two images to stitch');
+        return;
+      }}
+
+      const buttons = document.querySelectorAll('.batch-controls button');
+      const status = document.getElementById('batchStatus');
+      status.textContent = `Stitching ${{checkboxes.length}} selected images...`;
+      buttons.forEach(btn => btn.disabled = true);
+
+      try {{
+        const sessionIds = Array.from(checkboxes).map(cb => cb.value);
+        const response = await fetch('/api/stitch-selected', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{ session_ids: sessionIds, overlap_percent: 15 }})
+        }});
+
+        if (!response.ok) {{
+          const text = await response.text();
+          throw new Error(text || `HTTP ${{response.status}}`);
+        }}
+
+        const result = await response.json();
+        status.textContent = 'Stitch complete';
+        if (result.stitch && result.stitch.viewer_path) {{
+          window.open('/' + result.stitch.viewer_path.replace(/^\\/+/, ''), '_blank');
+        }}
+      }} catch (error) {{
+        console.error(error);
+        status.textContent = 'Stitch failed';
+        alert('Stitch failed: ' + error);
+      }} finally {{
+        buttons.forEach(btn => btn.disabled = false);
+      }}
     }}
   </script>
 </body>
@@ -972,20 +1051,87 @@ def _render_result_streamer_html(refresh_seconds: int = 5) -> str:
       flex: 1;
       min-height: calc(100vh - 132px);
       border-radius: 24px;
-      overflow: hidden;
+      overflow: auto;
       border: 1px solid rgba(255,255,255,0.7);
       box-shadow: 0 22px 56px rgba(31, 28, 23, 0.12);
       background: rgba(255,255,255,0.55);
+      padding: 18px;
     }}
-    iframe {{
+    .stream-grid {{
+      display: grid;
+      grid-template-columns: minmax(320px, 0.9fr) minmax(280px, 1.1fr);
+      gap: 16px;
+      align-items: start;
+    }}
+    .panel {{
+      border-radius: 20px;
+      background: rgba(255,255,255,0.82);
+      border: 1px solid var(--line);
+      padding: 16px;
+    }}
+    .image-panel img {{
       width: 100%;
-      height: calc(100vh - 132px);
-      border: 0;
-      background: white;
+      max-height: 62vh;
+      object-fit: contain;
+      display: block;
+      border-radius: 16px;
+      background: #fff;
+    }}
+    .eyebrow {{
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }}
+    .headline {{
+      margin: 0 0 10px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 0.95;
+    }}
+    .summary {{
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }}
+    .metric-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(120px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }}
+    .metric-card {{
+      border-radius: 14px;
+      background: rgba(25,92,89,0.06);
+      border: 1px solid rgba(25,92,89,0.1);
+      padding: 12px;
+    }}
+    .metric-label {{
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }}
+    .metric-value {{
+      font-weight: 700;
+      font-size: 20px;
+    }}
+    .list {{
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.45;
+    }}
+    .session-link {{
+      display: inline-block;
+      margin-top: 12px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
     }}
     .empty-state {{
-      position: absolute;
-      inset: 0;
       display: grid;
       place-items: center;
       padding: 24px;
@@ -1007,6 +1153,14 @@ def _render_result_streamer_html(refresh_seconds: int = 5) -> str:
       color: var(--muted);
       line-height: 1.6;
       margin: 0;
+    }}
+    @media (max-width: 900px) {{
+      .stream-grid {{
+        grid-template-columns: 1fr;
+      }}
+      .image-panel img {{
+        max-height: 42vh;
+      }}
     }}
   </style>
 </head>
@@ -1030,15 +1184,76 @@ def _render_result_streamer_html(refresh_seconds: int = 5) -> str:
           <p>As soon as a new microscope capture is analyzed, the latest report will appear here automatically without changing this page address.</p>
         </div>
       </div>
-      <iframe id="report-frame" title="Latest MMSS report" hidden></iframe>
+      <div id="stream-content" hidden>
+        <div class="stream-grid">
+          <section class="panel image-panel">
+            <div class="eyebrow">Latest Capture</div>
+            <img id="stream-image" alt="Latest microscope capture">
+          </section>
+          <section class="panel">
+            <div class="eyebrow">Current Interpretation</div>
+            <h2 class="headline" id="stream-title">Waiting for data</h2>
+            <p class="summary" id="stream-summary"></p>
+            <div class="metric-grid" id="metric-grid"></div>
+            <div class="eyebrow" style="margin-top:16px;">Raw Vision</div>
+            <ul class="list" id="vision-list"></ul>
+            <a class="session-link" id="session-link" href="#">Open full report</a>
+          </section>
+        </div>
+      </div>
     </section>
   </main>
   <script>
     const manifestUrl = '/latest/session_manifest.json';
-    const frame = document.getElementById('report-frame');
     const emptyState = document.getElementById('empty-state');
     const sessionPill = document.getElementById('session-pill');
+    const streamContent = document.getElementById('stream-content');
+    const streamImage = document.getElementById('stream-image');
+    const streamTitle = document.getElementById('stream-title');
+    const streamSummary = document.getElementById('stream-summary');
+    const metricGrid = document.getElementById('metric-grid');
+    const visionList = document.getElementById('vision-list');
+    const sessionLink = document.getElementById('session-link');
     let currentSessionId = null;
+
+    function renderMetrics(metrics) {{
+      const entries = Object.entries(metrics || {{}}).slice(0, 8);
+      metricGrid.innerHTML = entries.map(([key, value]) => `
+        <div class="metric-card">
+          <div class="metric-label">${{key}}</div>
+          <div class="metric-value">${{value ?? 'n/a'}}</div>
+        </div>
+      `).join('');
+    }}
+
+    function renderVision(vision, status, error) {{
+      if (!vision || Object.keys(vision).length === 0) {{
+        visionList.innerHTML = error
+          ? `<li><strong>status:</strong> ${{status || 'unavailable'}}</li><li><strong>error:</strong> ${{error}}</li>`
+          : '<li>No raw vision summary available.</li>';
+        return;
+      }}
+      const order = [
+        'object_guess',
+        'intuitive_species_guess',
+        'intuitive_species_reason',
+        'focus_quality',
+        'category_guess',
+        'confidence',
+        'summary'
+      ];
+      const seen = new Set();
+      const items = [];
+      for (const key of [...order, ...Object.keys(vision)]) {{
+        if (seen.has(key) || !(key in vision)) continue;
+        seen.add(key);
+        let value = vision[key];
+        if (Array.isArray(value)) value = value.join(', ');
+        if (value && typeof value === 'object') value = JSON.stringify(value);
+        items.push(`<li><strong>${{key}}:</strong> ${{value}}</li>`);
+      }}
+      visionList.innerHTML = items.join('');
+    }}
 
     async function loadLatest(forceReload = false) {{
       try {{
@@ -1057,18 +1272,25 @@ def _render_result_streamer_html(refresh_seconds: int = 5) -> str:
 
         sessionPill.textContent = `Latest: ${{nextSessionId}}`;
         emptyState.hidden = true;
-        frame.hidden = false;
+        streamContent.hidden = false;
 
         const normalizedTarget = '/' + target.replace(/^\\/+/, '');
-        if (forceReload || currentSessionId !== nextSessionId) {{
-          currentSessionId = nextSessionId;
-          frame.src = `${{normalizedTarget}}?embed=1&t=${{Date.now()}}`;
-        }} else if (frame.contentWindow) {{
-          frame.contentWindow.location.reload();
-        }}
+        const reportResponse = await fetch('/latest/report.json?t=' + Date.now(), {{ cache: 'no-store' }});
+        if (!reportResponse.ok) throw new Error(`Report HTTP ${{reportResponse.status}}`);
+        const report = await reportResponse.json();
+        const metrics = (report && report.final_metrics) || {{}};
+        const vision = report.vision_analysis || {{}};
+
+        currentSessionId = nextSessionId;
+        streamImage.src = '/' + (manifest.image_path || '').replace(/^\\/+/, '') + '?t=' + Date.now();
+        streamTitle.textContent = metrics.detected_type || vision.object_guess || vision.category_guess || 'Unknown pattern';
+        streamSummary.textContent = vision.summary || report.final_formula || 'No summary available yet.';
+        renderMetrics(metrics);
+        renderVision(vision, report.vision_status, report.vision_error);
+        sessionLink.href = `${{normalizedTarget}}?t=${{Date.now()}}`;
       }} catch (error) {{
         sessionPill.textContent = 'Waiting for latest report';
-        frame.hidden = true;
+        streamContent.hidden = true;
         emptyState.hidden = false;
       }}
     }}
@@ -1126,6 +1348,7 @@ def publish_analysis_session(image_path: str | Path, results: Dict[str, Any]) ->
         "vision_analysis": results.get("vision_analysis") or {},
         "vision_status": results.get("vision_status"),
         "vision_error": results.get("vision_error") or results.get("last_analysis_error"),
+        "microscope_context": results.get("microscope_context", {}),
         "microscopy_advice": _extract_microscopy_advice(results),
         "iterations_count": len(results.get("iterations", [])),
         "has_invariants": has_invariants,
@@ -1180,6 +1403,7 @@ def publish_analysis_session(image_path: str | Path, results: Dict[str, Any]) ->
         json.dumps(latest_manifest, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    shutil.copy2(session_report, LATEST_ROOT / "report.json")
 
     RESULT_STREAMER_ROOT.mkdir(parents=True, exist_ok=True)
     (RESULT_STREAMER_ROOT / "index.html").write_text(
@@ -1212,6 +1436,25 @@ def build_gallery() -> str:
             continue
 
     sessions.sort(key=lambda item: item.get("timestamp") or "", reverse=True)
+
+    if sessions:
+        latest_session = sessions[0]
+        latest_report_path = PROJECT_ROOT / latest_session["report_path"]
+        latest_viewer_path = PROJECT_ROOT / latest_session["viewer_path"]
+        LATEST_ROOT.mkdir(parents=True, exist_ok=True)
+        (LATEST_ROOT / "session_manifest.json").write_text(
+            json.dumps(
+                {
+                    **latest_session,
+                    "stream_path": _safe_relpath(latest_viewer_path, PROJECT_ROOT),
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        if latest_report_path.exists():
+            shutil.copy2(latest_report_path, LATEST_ROOT / "report.json")
 
     gallery_path = GALLERY_ROOT / "index.html"
     gallery_path.write_text(_render_gallery_html(sessions), encoding="utf-8")

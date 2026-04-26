@@ -769,6 +769,40 @@ class MMSS_Engine:
         haystack = " ".join(str(value).lower() for value in fields if value)
         return any(token in haystack for token in biological_tokens)
 
+    def _sanitize_followup_recommendations(self, payload: Dict[str, Any] | None) -> Dict[str, Any] | None:
+        if not payload:
+            return payload
+
+        blocked_tokens = (
+            "higher magnification",
+            "increase magnification",
+            "more magnification",
+            "polarized light",
+            "polariser",
+            "polarizer",
+            "brightness",
+            "adjust brightness",
+            "increase brightness",
+            "reduce brightness",
+        )
+        replacement_text = (
+            "Use the existing 40x objective, improve focus stability, and compare with adjacent fields "
+            "or repeated captures. Do not suggest changing magnification, brightness control, or polarized light."
+        )
+
+        followup = payload.get("recommended_followup")
+        if isinstance(followup, list):
+            filtered = [
+                item for item in followup
+                if not any(token in str(item).lower() for token in blocked_tokens)
+            ]
+            payload["recommended_followup"] = filtered or [replacement_text]
+        elif isinstance(followup, str):
+            if any(token in followup.lower() for token in blocked_tokens):
+                payload["recommended_followup"] = replacement_text
+
+        return payload
+
     def _should_prefer_vision_over_geometry(
         self,
         detected_type: str | None,
@@ -841,10 +875,16 @@ class MMSS_Engine:
         prompt = (
             "You are analyzing a microscope image. The image is sent raw except for downscaling. "
             "Return strict JSON with keys: object_guess, focus_quality, category_guess, biological_interpretation, "
-            "fractal_character, confidence, summary, visible_structures, recommended_followup. "
+            "fractal_character, confidence, summary, visible_structures, recommended_followup, "
+            "intuitive_species_guess, intuitive_species_reason. "
             "Prefer broad, careful biological or organic morphology classes such as root-like, "
             "vascular, pollen-like, fungal network, crystal-like, debris, or unknown. "
-            "Do not claim species-level identification."
+            "If the structure looks biological, you may add an intuitive non-authoritative organism/species guess, "
+            "but clearly treat it as a weak intuition rather than an identification. "
+            "Do not suggest higher magnification microscopy because the objective is fixed at 40x. "
+            "Do not suggest changing brightness because light brightness is not adjustable. "
+            "Do not suggest polarized light because it is not implemented yet. "
+            "Recommended followup must stay within current hardware limits."
         )
 
         # Retry logic with exponential backoff
@@ -874,6 +914,7 @@ class MMSS_Engine:
                 payload["mode"] = "mistral_raw_vision"
                 payload["model"] = self.vision_model
                 payload["image_resize_max"] = self.vision_max_size
+                payload = self._sanitize_followup_recommendations(payload)
                 self._last_vision_error = None
                 
                 # Cache the result

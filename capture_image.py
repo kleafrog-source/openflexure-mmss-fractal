@@ -39,7 +39,7 @@ def prepare_capture_target(filename: str | None = None) -> tuple[str, str]:
     return session_id, relative_path.as_posix()
 
 
-def capture_image(filename: str | None = None) -> str | None:
+def capture_image(filename: str | None = None) -> tuple[str | None, dict | None]:
     """Capture an image from the microscope."""
     print("Capturing image from microscope...")
 
@@ -57,18 +57,19 @@ def capture_image(filename: str | None = None) -> str | None:
 
         image_path = scope.capture_image(filename=filename)
         if image_path:
+            capture_context = scope.get_capture_context()
             print(f"Image saved to: {image_path}")
             print(f"Session folder: output/sessions/{session_id}")
-            return image_path
+            return image_path, capture_context
 
         print("Failed to capture image")
-        return None
+        return None, None
     except Exception as exc:
         print(f"Error: {exc}")
-        return None
+        return None, None
 
 
-def run_fractal_analysis(image_path: str, analysis_mode: str = "invariants"):
+def run_fractal_analysis(image_path: str, analysis_mode: str = "invariants", capture_context: dict | None = None):
     """Run MMSS fractal analysis for the captured image."""
     print("\nStarting fractal analysis...")
 
@@ -84,6 +85,8 @@ def run_fractal_analysis(image_path: str, analysis_mode: str = "invariants"):
 
         engine = MMSS_Engine(config={})
         results = engine.run(image_path)
+        if capture_context:
+            results["microscope_context"] = capture_context
         report_path = results.get("report_path", "output/reports/unknown_report.json")
         print(f"Fractal analysis complete! Report saved to: {report_path}")
         return results
@@ -160,7 +163,7 @@ def main():
     print("OpenFlexure Microscope Image Capture")
     print("=" * 60)
 
-    image_path = capture_image(args.filename)
+    image_path, capture_context = capture_image(args.filename)
 
     if not image_path:
         print("\n" + "=" * 60)
@@ -171,7 +174,7 @@ def main():
     analysis_results = None
     published_view = None
     if not args.no_analyze:
-        analysis_results = run_fractal_analysis(image_path, analysis_mode=args.analysis_mode)
+        analysis_results = run_fractal_analysis(image_path, analysis_mode=args.analysis_mode, capture_context=capture_context)
         if analysis_results:
             published_view = publish_analysis_view(image_path, analysis_results)
 

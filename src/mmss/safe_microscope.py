@@ -297,6 +297,36 @@ class SafeMicroscopeWrapper:
         except Exception as e:
             logger.error(f"❌ Failed to get status: {e}")
             return None
+
+    def get_capture_context(self) -> Dict[str, Any]:
+        """
+        Fetch a broader context snapshot from the microscope API.
+
+        This is best-effort metadata for reports and stitching, not a hard requirement
+        for capture itself.
+        """
+        context: Dict[str, Any] = {
+            "server_url": self.server_url,
+            "captured_at_unix": time.time(),
+        }
+
+        endpoints = {
+            "instrument_state": "/api/v2/instrument/state",
+            "instrument_settings": "/api/v2/instrument/settings",
+            "camera_stage_mapping": "/api/v2/extensions/org.openflexure.camera-stage-mapping/get_calibration",
+        }
+
+        for key, endpoint in endpoints.items():
+            try:
+                response = requests.get(f"{self.server_url}{endpoint}", timeout=8)
+                if response.status_code == 200:
+                    context[key] = response.json()
+                else:
+                    context[f"{key}_error"] = f"HTTP {response.status_code}"
+            except Exception as exc:
+                context[f"{key}_error"] = str(exc)
+
+        return context
     
     def get_command_log(self) -> list:
         """Return list of all logged commands"""

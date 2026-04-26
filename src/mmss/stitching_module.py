@@ -1,198 +1,247 @@
 """
-OpenFlexure Stitching Module (Template for future integration)
-This module will handle image stitching functionality when ready.
-Currently serves as a placeholder/template for future implementation.
+Helpers for stitching selected gallery sessions into a single mosaic.
 """
-import requests
+from __future__ import annotations
+
+import html
+import json
 import logging
-from typing import Optional, Dict, Any, List
+import shutil
+from datetime import datetime
 from pathlib import Path
+from typing import Any
+
+import numpy as np
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
+
+def _walk_dict_for_xy(node: Any) -> tuple[float, float] | None:
+    if isinstance(node, dict):
+        keys = {str(key).lower(): key for key in node.keys()}
+        if "x" in keys and "y" in keys:
+            try:
+                return float(node[keys["x"]]), float(node[keys["y"]])
+            except Exception:
+                pass
+        for value in node.values():
+            result = _walk_dict_for_xy(value)
+            if result is not None:
+                return result
+    elif isinstance(node, list):
+        for value in node:
+            result = _walk_dict_for_xy(value)
+            if result is not None:
+                return result
+    return None
+
+
+def _walk_dict_for_matrix(node: Any) -> list[list[float]] | None:
+    if isinstance(node, list) and len(node) == 2 and all(isinstance(row, list) for row in node):
+        if all(len(row) >= 2 for row in node):
+            try:
+                return [
+                    [float(node[0][0]), float(node[0][1])],
+                    [float(node[1][0]), float(node[1][1])],
+                ]
+            except Exception:
+                return None
+    if isinstance(node, dict):
+        for value in node.values():
+            result = _walk_dict_for_matrix(value)
+            if result is not None:
+                return result
+    elif isinstance(node, list):
+        for value in node:
+            result = _walk_dict_for_matrix(value)
+            if result is not None:
+                return result
+    return None
+
+
+def _extract_stage_position(context: dict[str, Any]) -> tuple[float, float] | None:
+    for key in ("instrument_state", "instrument_settings", "stage_position"):
+        value = context.get(key)
+        result = _walk_dict_for_xy(value)
+        if result is not None:
+            return result
+    return None
+
+
+def _extract_csm_matrix(context: dict[str, Any]) -> list[list[float]] | None:
+    for key in ("camera_stage_mapping", "instrument_settings", "instrument_state"):
+        value = context.get(key)
+        result = _walk_dict_for_matrix(value)
+        if result is not None:
+            return result
+    return None
+
+
+def _render_stitch_viewer(title: str, image_rel_path: str, stitch_meta: dict[str, Any]) -> str:
+    raw_meta = html.escape(json.dumps(stitch_meta, indent=2, ensure_ascii=False))
+    session_items = "".join(
+        f"<li>{html.escape(session_id)}</li>"
+        for session_id in stitch_meta.get("session_ids", [])
+    )
+    warning = stitch_meta.get("warning")
+    warning_html = (
+        f'<p style="color:#9a4624;"><strong>Warning:</strong> {html.escape(str(warning))}</p>'
+        if warning else ""
+    )
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{html.escape(title)}</title>
+  <style>
+    body {{ margin: 0; font-family: "Segoe UI", sans-serif; background: #f6f1e8; color: #1f1c17; }}
+    .shell {{ max-width: 1200px; margin: 0 auto; padding: 20px; }}
+    .panel {{ background: rgba(255,255,255,0.86); border: 1px solid rgba(0,0,0,0.08); border-radius: 20px; padding: 18px; margin-bottom: 16px; }}
+    h1 {{ margin: 0 0 8px; font-family: Georgia, serif; }}
+    img {{ width: 100%; display: block; border-radius: 16px; background: white; }}
+    ul {{ margin: 0; padding-left: 18px; }}
+    pre {{ overflow: auto; background: #1f1c17; color: #f6f1e8; padding: 14px; border-radius: 14px; }}
+    a {{ color: #195c59; font-weight: 700; }}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <h1>{html.escape(title)}</h1>
+      <p>Stitched from {len(stitch_meta.get("session_ids", []))} selected gallery images.</p>
+      {warning_html}
+      <p><a href="../gallery/index.html">Back to gallery</a></p>
+    </section>
+    <section class="panel">
+      <img src="{html.escape(image_rel_path)}" alt="Stitched microscope mosaic">
+    </section>
+    <section class="panel">
+      <h2>Source Sessions</h2>
+      <ul>{session_items}</ul>
+    </section>
+    <section class="panel">
+      <h2>Metadata</h2>
+      <pre>{raw_meta}</pre>
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+
 class StitchingModule:
-    """
-    Module for stitching multiple microscope images into a single large image.
-    
-    This is a TEMPLATE for future integration with OpenFlexure Microscope Server.
-    The actual stitching functionality will be added when the server supports it.
-    
-    Safety features:
-    - All operations logged
-    - Safe mode prevents execution
-    - Validation of parameters
-    """
-    
-    def __init__(self, server_url: str = "http://localhost:5000", 
-                 microscope_id: int = 1,
-                 safe_mode: bool = True):
-        """
-        Args:
-            server_url: URL of OpenFlexure Microscope Server
-            microscope_id: ID of microscope in the server
-            safe_mode: If True, only log operations without executing
-        """
-        self.server_url = server_url.rstrip('/')
-        self.microscope_id = microscope_id
-        self.safe_mode = safe_mode
-        self.operation_log = []
-        
-        logger.info(f"StitchingModule initialized (safe_mode={safe_mode})")
-    
-    def enable_safe_mode(self):
-        """Enable safe mode"""
-        self.safe_mode = True
-        logger.info("🛡️  StitchingModule SAFE MODE ENABLED")
-    
-    def disable_safe_mode(self):
-        """Disable safe mode (requires confirmation)"""
-        confirm = input("⚠️  WARNING! Disable safe mode for stitching? Type 'YES' to confirm: ")
-        if confirm == "YES":
-            self.safe_mode = False
-            logger.warning("⚠️  StitchingModule SAFE MODE DISABLED")
-        else:
-            logger.info("✅ Safe mode remains ENABLED")
-    
-    def _log_operation(self, operation: str, params: Dict[str, Any]):
-        """Log operation for audit trail"""
-        entry = {
-            'operation': operation,
-            'params': params,
-            'safe_mode': self.safe_mode,
-            'timestamp': __import__('time').time()
-        }
-        self.operation_log.append(entry)
-        
-        if self.safe_mode:
-            logger.info(f"🔍 [SAFE] {operation}({params})")
-        else:
-            logger.info(f"✅ [EXEC] {operation}({params})")
-    
-    def grid_scan(self, width_tiles: int = 3, height_tiles: int = 3, 
-                  overlap_percent: float = 15.0) -> Optional[str]:
-        """
-        Perform a grid scan and stitch images.
-        
-        Args:
-            width_tiles: Number of tiles in X direction
-            height_tiles: Number of tiles in Y direction
-            overlap_percent: Overlap between tiles (0-50%)
-            
-        Returns:
-            Path to stitched image or None if failed
-            
-        Note: This is a TEMPLATE - actual implementation depends on server API
-        """
-        # Validate parameters
-        if not (1 <= width_tiles <= 10):
-            raise ValueError(f"width_tiles must be 1-10, got {width_tiles}")
-        if not (1 <= height_tiles <= 10):
-            raise ValueError(f"height_tiles must be 1-10, got {height_tiles}")
-        if not (0 <= overlap_percent <= 50):
-            raise ValueError(f"overlap_percent must be 0-50, got {overlap_percent}")
-        
-        params = {
-            'width_tiles': width_tiles,
-            'height_tiles': height_tiles,
-            'overlap_percent': overlap_percent
-        }
-        
-        self._log_operation("GRID_SCAN", params)
-        
-        if self.safe_mode:
-            # В safe mode вернуть фейковый путь
-            fake_path = f"output/stitched_grid_{width_tiles}x{height_tiles}.jpg"
-            Path(fake_path).parent.mkdir(parents=True, exist_ok=True)
-            Path(fake_path).touch()
-            logger.info(f"🔍 [SAFE] Created fake stitched image: {fake_path}")
-            return fake_path
-        
-        # TODO: Реализовать реальное stitching через API сервера
-        # Примерный код (когда API будет доступен):
-        # try:
-        #     response = requests.post(
-        #         f"{self.server_url}/api/v2/stitching/",
-        #         json=params,
-        #         timeout=300  # Stitching может занять время
-        #     )
-        #     response.raise_for_status()
-        #     result = response.json()
-        #     output_path = f"output/{result['filename']}"
-        #     # Сохранить изображение
-        #     with open(output_path, 'wb') as f:
-        #         f.write(requests.get(result['url']).content)
-        #     return output_path
-        # except Exception as e:
-        #     logger.error(f"❌ Stitching failed: {e}")
-        #     return None
-        
-        logger.warning("⚠️  Stitching not yet implemented - server API required")
-        return None
-    
-    def linear_scan(self, start_x: float, start_y: float, 
-                    end_x: float, end_y: float,
-                    num_images: int = 10) -> Optional[str]:
-        """
-        Perform a linear scan and stitch images.
-        
-        Args:
-            start_x: Starting X position (μm)
-            start_y: Starting Y position (μm)
-            end_x: Ending X position (μm)
-            end_y: Ending Y position (μm)
-            num_images: Number of images to capture
-            
-        Returns:
-            Path to stitched image or None if failed
-            
-        Note: This is a TEMPLATE - actual implementation depends on server API
-        """
-        params = {
-            'start_x': start_x,
-            'start_y': start_y,
-            'end_x': end_x,
-            'end_y': end_y,
-            'num_images': num_images
-        }
-        
-        self._log_operation("LINEAR_SCAN", params)
-        
-        if self.safe_mode:
-            fake_path = f"output/stitched_linear_{num_images}.jpg"
-            Path(fake_path).parent.mkdir(parents=True, exist_ok=True)
-            Path(fake_path).touch()
-            logger.info(f"🔍 [SAFE] Created fake stitched image: {fake_path}")
-            return fake_path
-        
-        logger.warning("⚠️  Linear stitching not yet implemented - server API required")
-        return None
-    
-    def get_operation_log(self) -> List[Dict]:
-        """Return list of all logged operations"""
-        return self.operation_log.copy()
-    
-    def clear_operation_log(self):
-        """Clear operation log"""
-        self.operation_log.clear()
-        logger.info("📝 Stitching operation log cleared")
+    """Create a stitched mosaic from selected gallery sessions."""
 
+    def __init__(self, sessions_root: Path, output_root: Path):
+        self.sessions_root = Path(sessions_root)
+        self.output_root = Path(output_root)
+        self.stitches_root = self.output_root / "stitches"
+        self.stitches_root.mkdir(parents=True, exist_ok=True)
 
-# Placeholder for future integration with mmss_engine.py
-# Usage example (when ready):
-#
-# from .stitching_module import StitchingModule
-#
-# In MMSS_Engine.__init__:
-# self.stitching = StitchingModule(
-#     server_url=os.getenv('MICROSCOPE_SERVER_URL', 'http://localhost:5000'),
-#     microscope_id=int(os.getenv('MICROSCOPE_ID', '1')),
-#     safe_mode=True
-# )
-#
-# In _capture_and_atomize or similar method:
-# if microscopy_advice.get('stitching'):
-#     stitched_path = self.stitching.grid_scan(
-#         width_tiles=3,
-#         height_tiles=3,
-#         overlap_percent=15
-#     )
+    def stitch_sessions(self, session_ids: list[str], overlap_percent: float = 15.0) -> dict[str, Any]:
+        if len(session_ids) < 2:
+            raise ValueError("Select at least two sessions for stitching.")
+
+        from openflexure_stitching.loading.image import CachedOFSImage
+        from openflexure_stitching.loading.image_sets import CachedOFSImageSet, OFSImageSet
+        from openflexure_stitching.pipeline import perform_stitch_from_stage
+        from openflexure_stitching.settings import OutputSettings
+
+        stitch_id = "stitch_" + datetime.now().strftime("%Y%m%d_%H%M%S")
+        stitch_dir = self.stitches_root / stitch_id
+        input_dir = stitch_dir / "inputs"
+        stitch_dir.mkdir(parents=True, exist_ok=True)
+        input_dir.mkdir(parents=True, exist_ok=True)
+
+        cached_images: dict[str, CachedOFSImage] = {}
+        source_info: list[dict[str, Any]] = []
+        warning: str | None = None
+        fallback_stride = None
+
+        for index, session_id in enumerate(session_ids):
+            session_dir = self.sessions_root / session_id
+            manifest_path = session_dir / "session_manifest.json"
+            report_path = session_dir / "report.json"
+            if not manifest_path.exists() or not report_path.exists():
+                raise FileNotFoundError(f"Missing session files for {session_id}")
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            image_path = self.output_root.parent / manifest["image_path"]
+            if not image_path.exists():
+                raise FileNotFoundError(f"Missing image for {session_id}: {image_path}")
+
+            target_name = f"{index:03d}_{Path(manifest['image_filename']).name}"
+            target_path = input_dir / target_name
+            shutil.copy2(image_path, target_path)
+
+            with Image.open(target_path) as img:
+                width, height = img.size
+
+            microscope_context = report.get("session", {}).get("microscope_context") or report.get("microscope_context") or {}
+            stage_position = _extract_stage_position(microscope_context)
+            csm_matrix = _extract_csm_matrix(microscope_context)
+
+            if stage_position is None:
+                if fallback_stride is None:
+                    fallback_stride = int(width * (1 - overlap_percent / 100.0))
+                stage_position = (index * fallback_stride, 0)
+                warning = "Some sessions had no recorded stage coordinates. A left-to-right fallback layout was used."
+
+            if csm_matrix is None:
+                csm_matrix = [[1.0, 0.0], [0.0, 1.0]]
+
+            cached_images[target_name] = CachedOFSImage(
+                filename=target_name,
+                width=width,
+                height=height,
+                exif_available=False,
+                usercomment_available=False,
+                file_created_time=target_path.stat().st_mtime,
+                file_size=target_path.stat().st_size,
+                from_openflexure=False,
+                capture_time=target_path.stat().st_mtime,
+                stage_position=(int(stage_position[0]), int(stage_position[1])),
+                camera_to_sample_matrix=np.array(csm_matrix),
+                csm_width=width,
+                pixel_size_um=1.0,
+            )
+            source_info.append(
+                {
+                    "session_id": session_id,
+                    "image": target_name,
+                    "stage_position": stage_position,
+                    "csm_matrix": csm_matrix,
+                }
+            )
+
+        cache = CachedOFSImageSet(images=cached_images)
+        image_set = OFSImageSet(str(input_dir), cached=cache)
+        perform_stitch_from_stage(image_set, OutputSettings(output_dir=str(stitch_dir), stitching_mode="stage_stitch"))
+
+        stitched_image = stitch_dir / "stitched_from_stage.jpg"
+        if not stitched_image.exists():
+            raise RuntimeError("Stitching completed without producing stitched_from_stage.jpg")
+
+        manifest = {
+            "stitch_id": stitch_id,
+            "session_ids": session_ids,
+            "source_info": source_info,
+            "warning": warning,
+            "created_at": datetime.now().isoformat(),
+            "stitched_image": f"stitches/{stitch_id}/stitched_from_stage.jpg",
+            "viewer_path": f"stitches/{stitch_id}/index.html",
+        }
+        (stitch_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+        (stitch_dir / "index.html").write_text(
+            _render_stitch_viewer(
+                title=f"Stitched Mosaic {stitch_id}",
+                image_rel_path="stitched_from_stage.jpg",
+                stitch_meta=manifest,
+            ),
+            encoding="utf-8",
+        )
+
+        return manifest

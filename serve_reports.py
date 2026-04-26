@@ -21,6 +21,7 @@ from src.mmss.report_publisher import (
     open_in_browser,
     publish_analysis_session,
 )
+from src.mmss.stitching_module import StitchingModule
 
 load_project_env()
 
@@ -94,6 +95,8 @@ class APIHandler(SimpleHTTPRequestHandler):
         """Handle POST requests for API endpoints."""
         if self.path == "/api/batch-analysis":
             self.handle_batch_analysis()
+        elif self.path == "/api/stitch-selected":
+            self.handle_stitch_selected()
         else:
             self.send_error(404, "API endpoint not found")
     
@@ -163,6 +166,27 @@ class APIHandler(SimpleHTTPRequestHandler):
             
         except Exception as e:
             print(f"Error in batch analysis: {e}")
+            import traceback
+            traceback.print_exc()
+            self.send_error(500, str(e))
+
+    def handle_stitch_selected(self):
+        try:
+            content_length = int(self.headers["Content-Length"])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode("utf-8"))
+            session_ids = data.get("session_ids") or []
+            overlap_percent = float(data.get("overlap_percent", 15.0))
+
+            stitcher = StitchingModule(SESSIONS_ROOT, OUTPUT_ROOT)
+            manifest = stitcher.stitch_sessions(session_ids=session_ids, overlap_percent=overlap_percent)
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": True, "stitch": manifest}).encode("utf-8"))
+        except Exception as e:
+            print(f"Error in stitching: {e}")
             import traceback
             traceback.print_exc()
             self.send_error(500, str(e))
