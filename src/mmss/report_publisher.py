@@ -476,21 +476,30 @@ def _render_gallery_html(sessions: list[Dict[str, Any]]) -> str:
     for session in sessions:
         metrics = session.get("final_metrics", {})
         detected = metrics.get("detected_type", "Unknown pattern")
+        has_raw_vision = session.get("raw_vision") is not None
+        raw_vision_status = "✓" if has_raw_vision else "—"
         cards.append(
             f"""
-            <a class="card" href="../sessions/{html.escape(session['session_id'])}/index.html">
-              <img src="../sessions/{html.escape(session['session_id'])}/{html.escape(session['image_filename'])}" alt="Capture preview">
-              <div class="card-body">
-                <div class="stamp">{html.escape(str(session.get('timestamp', 'n/a')))}</div>
-                <h2>{html.escape(str(detected))}</h2>
-                <p>{html.escape(str(session.get('final_formula') or 'No final formula'))}</p>
-                <div class="chip-row">
-                  <span>V {html.escape(_format_metric(metrics.get('V')))}</span>
-                  <span>D_f {html.escape(_format_metric(metrics.get('D_f')))}</span>
-                  <span>Status {html.escape(str(session.get('status', 'unknown')))}</span>
+            <div class="card" data-session-id="{html.escape(session['session_id'])}" data-image-path="{html.escape(session.get('image_path', ''))}">
+              <label class="card-checkbox">
+                <input type="checkbox" class="session-checkbox" value="{html.escape(session['session_id'])}">
+                <span class="checkmark"></span>
+              </label>
+              <a href="../sessions/{html.escape(session['session_id'])}/index.html" class="card-link">
+                <img src="../sessions/{html.escape(session['session_id'])}/{html.escape(session['image_filename'])}" alt="Capture preview">
+                <div class="card-body">
+                  <div class="stamp">{html.escape(str(session.get('timestamp', 'n/a')))}</div>
+                  <h2>{html.escape(str(detected))}</h2>
+                  <p>{html.escape(str(session.get('final_formula') or 'No final formula'))}</p>
+                  <div class="chip-row">
+                    <span>V {html.escape(_format_metric(metrics.get('V')))}</span>
+                    <span>D_f {html.escape(_format_metric(metrics.get('D_f')))}</span>
+                    <span>Status {html.escape(str(session.get('status', 'unknown')))}</span>
+                    <span class="raw-vision-status">Raw Vision: {raw_vision_status}</span>
+                  </div>
                 </div>
-              </div>
-            </a>
+              </a>
+            </div>
             """
         )
 
@@ -597,16 +606,172 @@ def _render_gallery_html(sessions: list[Dict[str, Any]]) -> str:
       font-size: 13px;
       font-weight: 700;
     }}
+    .raw-vision-status {{
+      background: rgba(182, 84, 42, 0.12);
+      color: #b6542a;
+    }}
+    .card {{
+      position: relative;
+    }}
+    .card-checkbox {{
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 10;
+      cursor: pointer;
+    }}
+    .card-checkbox input {{
+      display: none;
+    }}
+    .checkmark {{
+      display: block;
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--accent);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.9);
+      transition: all 150ms ease;
+    }}
+    .card-checkbox input:checked + .checkmark {{
+      background: var(--accent);
+      border-color: var(--accent);
+    }}
+    .card-checkbox input:checked + .checkmark::after {{
+      content: "✓";
+      display: block;
+      color: white;
+      text-align: center;
+      line-height: 20px;
+      font-size: 14px;
+      font-weight: bold;
+    }}
+    .card-link {{
+      display: block;
+      text-decoration: none;
+      color: inherit;
+    }}
+    .batch-controls {{
+      margin: 24px 0;
+      padding: 16px;
+      background: var(--card);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }}
+    .batch-controls button {{
+      padding: 12px 24px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 150ms ease;
+    }}
+    .batch-controls button:hover {{
+      background: #144a47;
+    }}
+    .batch-controls button:disabled {{
+      background: var(--muted);
+      cursor: not-allowed;
+    }}
+    .batch-status {{
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .batch-progress {{
+      width: 100%;
+      max-width: 300px;
+      height: 8px;
+      background: rgba(32, 26, 20, 0.1);
+      border-radius: 999px;
+      overflow: hidden;
+    }}
+    .batch-progress-bar {{
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 300ms ease;
+    }}
   </style>
 </head>
 <body>
   <main class="shell">
     <h1>Microscope Analysis Gallery</h1>
     <p class="lede">Each capture is stored as a session pair: microscope image, raw JSON report, and a browser-ready HTML viewer. Open any card to inspect the full MMSS decision trace.</p>
+    
+    <div class="batch-controls">
+      <button id="batchVisionBtn" onclick="runBatchVision()">Run Mistral Raw Vision on Selected</button>
+      <span id="batchStatus" class="batch-status">Select images to analyze</span>
+      <div class="batch-progress">
+        <div id="batchProgressBar" class="batch-progress-bar"></div>
+      </div>
+    </div>
+    
     <section class="grid">
       {"".join(cards) or "<p>No sessions published yet.</p>"}
     </section>
   </main>
+  
+  <script>
+    async function runBatchVision() {{
+      const checkboxes = document.querySelectorAll('.session-checkbox:checked');
+      if (checkboxes.length === 0) {{
+        alert('Please select at least one image');
+        return;
+      }}
+      
+      const btn = document.getElementById('batchVisionBtn');
+      const status = document.getElementById('batchStatus');
+      const progressBar = document.getElementById('batchProgressBar');
+      
+      btn.disabled = true;
+      const sessionIds = Array.from(checkboxes).map(cb => cb.value);
+      
+      for (let i = 0; i < sessionIds.length; i++) {{
+        const sessionId = sessionIds[i];
+        status.textContent = `Processing ${{i + 1}}/${{sessionIds.length}}: ${{sessionId}}`;
+        progressBar.style.width = `${{((i + 1) / sessionIds.length) * 100}}%`;
+        
+        try {{
+          const response = await fetch('/api/batch-vision', {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'application/json' }},
+            body: JSON.stringify({{ session_id: sessionId }})
+          }});
+          
+          if (response.ok) {{
+            const result = await response.json();
+            console.log('Vision result:', result);
+            // Update card status
+            const card = document.querySelector(`[data-session-id="${{sessionId}}"]`);
+            if (card) {{
+              const statusSpan = card.querySelector('.raw-vision-status');
+              if (statusSpan) {{
+                statusSpan.textContent = 'Raw Vision: ✓';
+              }}
+            }}
+          }} else {{
+            console.error('Vision failed for', sessionId);
+          }}
+        }} catch (error) {{
+          console.error('Error processing', sessionId, error);
+        }}
+        
+        // 30 second delay between requests
+        if (i < sessionIds.length - 1) {{
+          await new Promise(resolve => setTimeout(resolve, 30000));
+        }}
+      }}
+      
+      status.textContent = `Completed ${{sessionIds.length}} images`;
+      btn.disabled = false;
+      setTimeout(() => location.reload(), 2000);
+    }}
+  </script>
 </body>
 </html>
 """

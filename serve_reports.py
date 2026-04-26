@@ -5,11 +5,99 @@ Serve generated MMSS reports over HTTP for browser-based viewing.
 from __future__ import annotations
 
 import argparse
+import json
+import os
+import time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from src.mmss.report_publisher import OUTPUT_ROOT, build_gallery, get_local_ip, open_in_browser
+from dotenv import load_dotenv
+
+from src.mmss.report_publisher import OUTPUT_ROOT, SESSIONS_ROOT, build_gallery, get_local_ip, open_in_browser
+
+load_dotenv(".env.local")
+
+
+class APIHandler(SimpleHTTPRequestHandler):
+    """Custom handler that serves static files and API endpoints."""
+    
+    def do_POST(self):
+        """Handle POST requests for API endpoints."""
+        if self.path == "/api/batch-vision":
+            self.handle_batch_vision()
+        else:
+            self.send_error(404, "API endpoint not found")
+    
+    def handle_batch_vision(self):
+        """Handle batch Mistral vision analysis request."""
+        try:
+            content_length = int(self.headers["Content-Length"])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode("utf-8"))
+            
+            session_id = data.get("session_id")
+            if not session_id:
+                self.send_error(400, "Missing session_id")
+                return
+            
+            # Find session manifest
+            manifest_path = SESSIONS_ROOT / session_id / "session_manifest.json"
+            if not manifest_path.exists():
+                self.send_error(404, "Session not found")
+                return
+            
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            image_path = manifest.get("image_path")
+            report_path = manifest.get("report_path")
+            
+            if not image_path or not Path(image_path).exists():
+                self.send_error(404, "Image not found")
+                return
+            
+            # Run vision analysis
+            from src.mmss.mmss_engine import MMSS_Engine
+            
+            os.environ["USE_REAL_MICROSCOPE"] = "False"
+            os.environ["MMSS_SAFETY_MODE_ACTIVE"] = "True"
+            os.environ["MMSS_ANALYSIS_MODE"] = "vision_only"
+            
+            engine = MMSS_Engine(config={})
+            vision_result = engine._analyze_raw_image_with_mistral(image_path)
+            
+            if not vision_result:
+                # Retry once on failure
+                time.sleep(5)
+                vision_result = engine._analyze_raw_image_with_mistral(image_path)
+            
+            # Update report with raw_vision block
+            if report_path and Path(report_path).exists():
+                with open(report_path, "r", encoding="utf-8") as f:
+                    report = json.load(f)
+                
+                report["raw_vision"] = vision_result
+                
+                with open(report_path, "w", encoding="utf-8") as f:
+                    json.dump(report, f, indent=2, ensure_ascii=False, default=str)
+                
+                # Update manifest
+                manifest["raw_vision"] = vision_result is not None
+                manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+            
+            # Rebuild gallery to update status
+            build_gallery()
+            
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            response = {"success": vision_result is not None, "raw_vision": vision_result}
+            self.wfile.write(json.dumps(response).encode("utf-8"))
+            
+        except Exception as e:
+            print(f"Error in batch vision: {e}")
+            import traceback
+            traceback.print_exc()
+            self.send_error(500, str(e))
 
 
 def main():
@@ -22,7 +110,7 @@ def main():
     build_gallery()
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
-    handler = partial(SimpleHTTPRequestHandler, directory=str(Path(OUTPUT_ROOT)))
+    handler = partial(APIHandler, directory=str(Path(OUTPUT_ROOT)))
     server = ThreadingHTTPServer((args.host, args.port), handler)
 
     local_url = f"http://127.0.0.1:{args.port}/gallery/index.html"
